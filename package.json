@@ -10,7 +10,10 @@
     "pack": "electron-builder --win portable"
   },
   "dependencies": {
-    "iconv-lite": "^0.6.3"
+    "@cliqz/adblocker-electron": "^1.27.0",
+    "@xmldom/xmldom": "^0.8.0",
+    "iconv-lite": "^0.6.3",
+    "xpath": "^0.0.34"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -30,11 +33,13 @@
       "txt-reader.js",
       "index.html",
       "welcome.html",
+      "webview-preload.js",
+      "bs.json",
+      "novel-sources.json",
       "使用说明.txt",
       "examples/**/*",
-      "package.json",
-      "node_modules/iconv-lite/**/*",
-      "node_modules/safer-buffer/**/*"
+      "build/**/*",
+      "package.json"
     ],
     "win": {
       "target": [
@@ -43,6 +48,7 @@
           "arch": ["x64"]
         }
       ],
+      "icon": "build/icon.png",
       "artifactName": "PipReader.exe",
       "signAndEditExecutable": false
     },
