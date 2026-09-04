@@ -1,0 +1,92 @@
+{
+  "version": "1.0",
+  "sources": [
+    {
+      "id": "fanqie",
+      "name": "番茄小说",
+      "type": "api",
+      "enabled": true,
+      "search": {
+        "url": "https://novel.snssdk.com/api/novel/channel/homepage/search/search/v1/",
+        "method": "GET",
+        "params": {
+          "device_platform": "android",
+          "parent_enterfrom": "novel_channel_search.tab.",
+          "offset": "0",
+          "aid": "1967",
+          "q": "{keyword}"
+        },
+        "headers": {
+          "User-Agent": "com.ss.android.article.news/7.0.3 (Linux; U; Android 12; zh_CN; Pixel 6)"
+        },
+        "resultPath": "data.ret_data",
+        "fields": {
+          "id": "book_id",
+          "name": "title",
+          "author": "author",
+          "cover": "audio_thumb_uri",
+          "category": "category",
+          "intro": "introduction"
+        }
+      },
+      "detail": {
+        "url": "https://fanqienovel.com/api/reader/directory/detail",
+        "method": "GET",
+        "params": {
+          "bookId": "{bookId}"
+        },
+        "headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+      },
+      "chapter": {
+        "url": "https://fanqienovel.com/api/reader/full",
+        "method": "GET",
+        "params": {
+          "itemId": "{chapterId}"
+        },
+        "headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        },
+        "contentPath": "data.content"
+      },
+      "note": "番茄小说官方API，国内可用，内容需字体解密"
+    },
+    {
+      "id": "lingdian",
+      "name": "零点看书",
+      "type": "xpath",
+      "enabled": true,
+      "search": {
+        "url": "https://www.lingdiankanshu.co/ar.php?keyWord={keyword}",
+        "method": "GET",
+        "charset": "UTF-8"
+      },
+      "note": "零点看书，国内可用"
+    },
+    {
+      "id": "aiqu",
+      "name": "爱趣小说",
+      "type": "xpath",
+      "enabled": true,
+      "search": {
+        "url": "http://m.aiquxs.la/ar.php?keyWord={keyword}",
+        "method": "GET",
+        "charset": "UTF-8"
+      },
+      "note": "爱趣小说，国内可用"
+    },
+    {
+      "id": "jjwxc",
+      "name": "晋江文学城",
+      "type": "xpath",
+      "enabled": true,
+      "search": {
+        "url": "https://www.jjwxc.net/search.php?kw={keyword}&t=1",
+        "method": "GET",
+        "charset": "UTF-8"
+      },
+      "note": "晋江文学城，国内可用"
+    }
+  ]
+}

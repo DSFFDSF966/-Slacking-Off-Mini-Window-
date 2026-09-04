@@ -1,0 +1,56 @@
+{
+  "name": "pip-reader",
+  "version": "1.3.0",
+  "description": "Simple PiP reader window",
+  "main": "main.js",
+  "author": "local",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win portable"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.6.3"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "local.pip.reader",
+    "productName": "PipReader",
+    "executableName": "PipReader",
+    "electronDist": "node_modules/electron/dist",
+    "directories": {
+      "output": "dist-out"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "txt-reader.js",
+      "index.html",
+      "welcome.html",
+      "使用说明.txt",
+      "examples/**/*",
+      "package.json",
+      "node_modules/iconv-lite/**/*",
+      "node_modules/safer-buffer/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "PipReader.exe",
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "requestExecutionLevel": "user",
+      "unpackDirName": "PipReader"
+    },
+    "compression": "maximum",
+    "asar": true
+  }
+}

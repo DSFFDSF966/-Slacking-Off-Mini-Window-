@@ -1,0 +1,2204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: file: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' file: blob:; img-src 'self' data: file:;" />
+  <title>小窗</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #ffffff;
+      color: #333;
+      font: 12px/1.35 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    body.has-bg {
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    }
+    #app { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
+
+    /* ===== 顶栏：浅色半透明 ===== */
+    #bar {
+      flex: 0 0 38px; display: flex; align-items: center; gap: 3px; padding: 0 6px;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      position: relative; z-index: 50;
+      -webkit-app-region: drag;
+      overflow-x: auto; overflow-y: hidden; white-space: nowrap;
+    }
+    #bar::-webkit-scrollbar { height: 0; }
+    #bar button, #bar input, #bar select, #bar label { -webkit-app-region: no-drag; flex-shrink: 0; }
+
+    button, select {
+      height: 26px; padding: 0 8px;
+      border: 1px solid rgba(0,0,0,0.1);
+      border-radius: 6px;
+      background: rgba(0,0,0,0.04);
+      color: #444; cursor: pointer; font: inherit; white-space: nowrap; font-size: 11px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    button:hover { background: rgba(0,0,0,0.09); border-color: rgba(0,0,0,0.18); }
+    button:active { background: rgba(0,0,0,0.13); }
+    button.on { background: rgba(72, 187, 120, 0.15); border-color: rgba(72, 187, 120, 0.4); color: #2f855a; }
+    button.muted { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35); color: #c53030; }
+    button.icon { width: 28px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+    button.close-btn:hover { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #c53030; }
+    button.primary { background: rgba(66, 153, 225, 0.15); border-color: rgba(66, 153, 225, 0.4); color: #2b6cb0; }
+    button.primary:hover { background: rgba(66, 153, 225, 0.25); }
+
+    #url {
+      flex: 1 1 auto; min-width: 60px; height: 26px;
+      border: 1px solid rgba(0,0,0,0.1); border-radius: 6px;
+      background: rgba(255,255,255,0.7); color: #333; padding: 0 10px;
+      outline: none; font: inherit; font-size: 11px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    #url:focus { border-color: rgba(66, 153, 225, 0.5); box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.1); }
+    #url::placeholder { color: rgba(0,0,0,0.3); }
+
+    .slider-group { display: flex; align-items: center; gap: 2px; }
+    .slider-group input[type="range"] {
+      width: 0; opacity: 0; transition: width 0.2s, opacity 0.2s;
+      accent-color: #4299e1; height: 26px; cursor: pointer;
+    }
+    .slider-group.open input[type="range"] { width: 60px; opacity: 1; }
+
+    #quickSite, #speed { font-size: 11px; background: rgba(0,0,0,0.04); color: #444; }
+
+    /* ===== 主区域 ===== */
+    #main { flex: 1 1 auto; min-height: 0; position: relative; display: flex; background: transparent; }
+    #viewHost, #reader, #player { flex: 1 1 auto; min-width: 0; min-height: 0; width: 100%; height: 100%; }
+    #viewHost { display: flex; }
+    webview { flex: 1 1 auto; width: 100%; height: 100%; min-width: 0; min-height: 0; }
+    .hidden { display: none !important; }
+    /* 分屏模式 */
+    #splitContainer { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; width: 100%; height: 100%; overflow: hidden; }
+    #splitContainer.split { flex-direction: row; }
+    #splitContainer.split #viewHost { flex: 0 0 55%; height: 100%; min-width: 0; }
+    #splitContainer.split #reader { flex: 1 1 auto; display: flex !important; height: 100%; border-left: 1px solid rgba(0,0,0,0.1); min-width: 0; background: rgba(255,255,255,0.97); overflow: hidden; }
+    #splitContainer.split #reader #novel { overflow: auto; }
+    #splitContainer.split #reader #novel::-webkit-scrollbar { width: 4px; }
+    #splitDivider { width: 6px; cursor: col-resize; background: rgba(0,0,0,0.2); flex-shrink: 0; transition: background 0.2s; position: relative; z-index: 100; }
+    #splitDivider:hover { background: rgba(66,153,225,0.7); }
+    #splitDivider::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 3px; height: 28px; background: rgba(255,255,255,0.9); border-radius: 2px; }
+    #splitContainer.split #splitDivider { display: block !important; }
+    /* 分屏空状态 */
+    .split-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #999; font-size: 12px; gap: 8px; }
+    .split-empty .icon { font-size: 32px; opacity: 0.3; }
+
+    /* ===== 小说阅读器 ===== */
+    #reader { display: flex; background: transparent; }
+    #toc {
+      width: 140px; flex: 0 0 140px; overflow: auto;
+      background: rgba(255, 255, 255, 0.85);
+      border-right: 1px solid rgba(0,0,0,0.06);
+    }
+    #toc.hidden { display: none !important; }
+    #toc .h { padding: 10px 8px; font-size: 11px; color: #999; font-weight: 600; }
+    #toc .i { padding: 6px 10px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #555; border-radius: 4px; margin: 1px 4px; }
+    #toc .i:hover { background: rgba(0,0,0,0.05); }
+    #toc .i.on { background: rgba(66, 153, 225, 0.12); color: #2b6cb0; }
+    #novel {
+      flex: 1; overflow: auto; padding: 20px 28px 48px; color: #2a2a2a; background: transparent;
+      font-size: 17px; line-height: 1.9; user-select: text;
+    }
+    #novel::-webkit-scrollbar { width: 5px; }
+    #novel::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+    #novel .t { text-align: center; font-weight: 700; margin: 10px 0 18px; font-size: 1.15em; color: #1a1a1a; }
+    #novel .p { text-indent: 2em; margin-bottom: 0.4em; white-space: pre-wrap; }
+
+    /* ===== 本地视频 ===== */
+    #player { display: flex; align-items: center; justify-content: center; background: #000; }
+    #player video { width: 100%; height: 100%; object-fit: contain; }
+
+    /* ===== 去顶栏模式 ===== */
+    #app.chrome-off #bar { display: none; }
+    #dragStrip {
+      display: none; position: absolute; left: 0; right: 0; top: 0; height: 4px; z-index: 30;
+      -webkit-app-region: drag; transition: height 0.15s;
+    }
+    #app.chrome-off #dragStrip { display: block; }
+    #dragStrip:hover { height: 8px; }
+
+    /* ===== 弹窗 ===== */
+    .modal {
+      display: none; position: absolute; inset: 0; z-index: 50;
+      background: rgba(0,0,0,0.25);
+      align-items: center; justify-content: center;
+    }
+    .modal.show { display: flex; }
+    .dropdown {
+      display: none; position: absolute; top: 38px; right: 8px; z-index: 60;
+      width: 280px; max-height: 320px;
+      background: rgba(255,255,255,0.97); backdrop-filter: blur(16px);
+      border: 1px solid rgba(0,0,0,0.1); border-radius: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15); overflow: hidden;
+    }
+    .dropdown.show { display: block; }
+    .dropdown-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 12px; border-bottom: 1px solid rgba(0,0,0,0.06);
+      font-size: 13px; font-weight: 600; color: #333;
+    }
+    .dropdown-list { max-height: 270px; overflow-y: auto; }
+    .dropdown-item {
+      padding: 8px 12px; font-size: 12px; color: #444; cursor: pointer;
+      border-bottom: 1px solid rgba(0,0,0,0.04); display: flex;
+      justify-content: space-between; align-items: center;
+    }
+    .dropdown-item:hover { background: rgba(66,153,225,0.08); }
+    .dropdown-item .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dropdown-item .del { color: #999; font-size: 11px; margin-left: 8px; opacity: 0; }
+    .dropdown-item:hover .del { opacity: 1; }
+    .dropdown-empty { padding: 20px; text-align: center; color: #999; font-size: 12px; }
+    .panel {
+      width: min(460px, 94%); max-height: 88%; overflow: auto;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(0,0,0,0.1);
+      border-radius: 12px; padding: 16px 18px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+      color: #333;
+    }
+    .panel h3 { margin: 0 0 12px; font-size: 15px; font-weight: 600; color: #1a1a1a; }
+    .panel p, .panel li { font-size: 12px; line-height: 1.7; color: #555; }
+    .panel ul { padding-left: 18px; margin: 6px 0 10px; }
+    .row { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
+    .row label { width: 76px; color: #666; flex-shrink: 0; font-size: 12px; }
+    .row input[type="text"] {
+      flex: 1; height: 28px; border: 1px solid rgba(0,0,0,0.12); border-radius: 6px;
+      padding: 0 10px; font: inherit; font-size: 12px;
+      background: rgba(0,0,0,0.02); color: #333; outline: none;
+    }
+    .row input[type="text"]:focus { border-color: rgba(66, 153, 225, 0.5); }
+    .row input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; accent-color: #4299e1; }
+    .row select {
+      height: 28px; color: #444; background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.12); font-size: 12px;
+    }
+    .row textarea {
+      flex: 1; border: 1px solid rgba(0,0,0,0.12); border-radius: 6px;
+      padding: 6px 10px; font: inherit; font-size: 11px; resize: vertical;
+      min-height: 56px; background: rgba(0,0,0,0.02); color: #333;
+      font-family: "Consolas", "Courier New", monospace; outline: none;
+    }
+    .row .hint { font-size: 11px; color: #999; }
+    .section-title {
+      font-size: 11px; font-weight: 600; color: #888; margin: 14px 0 5px;
+      padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.06);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px;
+    }
+    .section-title::before {
+      content: '▾'; font-size: 10px; transition: transform 0.2s; display: inline-block;
+    }
+    .section-title.collapsed::before { transform: rotate(-90deg); }
+    .section-title.collapsed + * { display: none !important; }
+    .collapse-hidden { display: none !important; }
+    .section-reset {
+      margin-left: auto; padding: 1px 6px; font-size: 10px; color: #999;
+      background: transparent; border: 1px solid rgba(0,0,0,0.1); border-radius: 3px; cursor: pointer;
+    }
+    .section-reset:hover { color: #e53e3e; border-color: rgba(229,62,62,0.3); }
+    .section-title:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+    .actions { display: flex; gap: 8px; justify-content: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.08); }
+    .actions { display: flex; gap: 12px; justify-content: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.08); }
+    .actions button {
+      background: #fff;
+      border: 1px solid #d1d1d6;
+      border-radius: 8px;
+      padding: 8px 28px;
+      font-size: 13px;
+      color: #000;
+      cursor: pointer;
+      text-align: center;
+      line-height: 1.5;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 80px;
+    }
+    .actions button:hover {
+      background: #f5f5f7;
+    }
+    .actions .primary {
+      background: #fff;
+      border: 1px solid #d1d1d6;
+      color: #000;
+    }
+    kbd { background: rgba(0,0,0,0.06); border: 1px solid rgba(0,0,0,0.12); border-radius: 3px; padding: 1px 5px; font-size: 10px; color: #555; }
+
+    /* 背景图预览 */
+    .bg-preview {
+      width: 100%; height: 60px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1);
+      background-size: cover; background-position: center; margin-bottom: 6px;
+    }
+    .bg-actions { display: flex; gap: 6px; }
+    .bg-actions button { flex: 1; font-size: 11px; }
+
+    /* 顶栏按钮开关网格 */
+    .toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+    .toggle-grid .row { margin: 3px 0; }
+    .toggle-grid .row label { width: auto; flex: 1; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="bar">
+      <button id="back" class="icon" title="后退">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <button id="fwd" class="icon" title="前进">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>
+      <button id="reload" class="icon" title="刷新">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+      <button id="file" class="icon" title="打开 TXT / 本地视频">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <input id="url" type="text" placeholder="网址 / 搜索" spellcheck="false" />
+      <button id="go" class="primary icon" title="前往">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </button>
+      <select id="quickSite" title="快捷网站"></select>
+      <select id="speed" title="倍速">
+        <option value="0.75">0.75x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2">2x</option>
+        <option value="3">3x</option>
+      </select>
+      <div class="slider-group" id="muteGroup">
+        <button id="muteBtn" class="icon" title="一键静音">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+        </button>
+        <button id="mediaPlayBtn" class="hidden icon" title="播放/暂停">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>
+      </div>
+      <button id="fontDown" class="hidden icon" title="字号减小">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+      </button>
+      <button id="fontUp" class="hidden icon" title="字号增大">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3M9 20h6M12 4v16M17 14v6M14 17h6"/></svg>
+      </button>
+      <button id="tocBtn" class="hidden icon" title="显示/隐藏目录">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      </button>
+      <div class="slider-group" id="opacityGroup">
+        <button id="opacityBtn" class="icon" title="透明度（Alt+滚轮）">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/></svg>
+        </button>
+        <input id="opacity" type="range" min="20" max="100" value="100" />
+      </div>
+      <button id="pin" class="icon on" title="窗口始终浮在最前">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+      </button>
+      <button id="splitBtn" class="icon" title="分屏模式（左视频右小说）">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+      </button>
+      <button id="favBtn" class="icon" title="收藏夹">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </button>
+      <button id="histBtn" class="icon" title="历史记录">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
+      <button id="searchBtn" class="icon" title="小说TXT搜索">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </button>
+      <button id="hide" class="icon" title="一键藏起来">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+      <button id="helpBtn" class="icon" title="说明书">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </button>
+      <button id="setBtn" class="icon" title="设置">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <button id="close" class="icon close-btn" title="藏到托盘">×</button>
+    </div>
+    <div id="main">
+      <div id="dragStrip" title="拖动 · 双击恢复顶栏"></div>
+      <div id="splitContainer">
+        <div id="viewHost"><webview id="view" partition="persist:pip"></webview></div>
+        <div id="splitDivider" class="hidden"></div>
+        <div id="reader" class="hidden">
+          <div id="toc"></div>
+          <div id="novel"></div>
+        </div>
+      </div>
+      <div id="player" class="hidden"><video id="video" controls></video></div>
+
+      <!-- 说明书 -->
+      <div id="helpModal" class="modal">
+        <div class="panel" style="max-height:80vh;display:flex;flex-direction:column;">
+          <h3 style="flex-shrink:0;">使用说明</h3>
+          <div style="flex:1;overflow-y:auto;padding-right:4px;font-size:12px;line-height:1.7;">
+            <p><b>快速上手</b>：地址栏输入网址或搜词 → 点 Go，就能在小窗里看任何网页。</p>
+            <p style="margin-bottom:4px;"><b>顶部按钮（从左到右）</b>：</p>
+            <ul style="margin-top:0;padding-left:18px;">
+              <li><b>主页</b>：回到欢迎页</li>
+              <li><b>上一页/下一页</b>：网页前进后退</li>
+              <li><b>刷新</b>：刷新当前页面</li>
+              <li><b>搜索</b>：搜小说，在线看</li>
+              <li><b>收藏</b>：收藏当前网页，下次一键打开</li>
+              <li><b>历史</b>：看过的网页记录</li>
+              <li><b>分屏</b>：左边视频右边小说，同时看</li>
+              <li><b>置顶</b>：窗口永远在最前面</li>
+              <li><b>透明度</b>：调窗口透明程度</li>
+              <li><b>倍速</b>：视频加速（1x/1.5x/2x/3x）</li>
+              <li><b>静音</b>：一键静音/恢复</li>
+              <li><b>老板键</b>：一键隐身，窗口和任务栏全消失，再按恢复</li>
+              <li><b>设置</b>：打开设置面板</li>
+            </ul>
+            <p style="margin-bottom:4px;"><b>快捷键</b>：</p>
+            <ul style="margin-top:0;padding-left:18px;">
+              <li><kbd>F12</kbd> 老板键（默认，可改）：一键隐身/显示</li>
+              <li><kbd>Ctrl+滚轮</kbd> 放大/缩小网页</li>
+              <li><kbd>Alt+滚轮</kbd> 调窗口透明度</li>
+              <li><kbd>Ctrl+M</kbd> 一键静音</li>
+            </ul>
+            <p style="margin-bottom:4px;"><b>看小说</b>：</p>
+            <ul style="margin-top:0;padding-left:18px;">
+              <li>点搜索按钮 → 选"书源解析" → 输入小说名 → 搜索</li>
+              <li>点小说 → 看目录 → 点章节直接看</li>
+              <li>目录底部可"导出全本TXT"</li>
+              <li>本地TXT直接拖进窗口就能看</li>
+            </ul>
+            <p style="margin-bottom:4px;"><b>分屏摸鱼</b>：</p>
+            <ul style="margin-top:0;padding-left:18px;">
+              <li>先打开视频网站 → 点 ⬛⬛ 分屏</li>
+              <li>左边视频，右边小说，中间拖动调大小</li>
+              <li>再点一次分屏按钮退出</li>
+            </ul>
+            <p style="margin-bottom:4px;"><b>设置里能改什么</b>：</p>
+            <ul style="margin-top:0;padding-left:18px;">
+              <li>背景图片、快速搜索源、顶栏按钮显示</li>
+              <li>热键（老板键等）、外观（标题/字体）</li>
+              <li>快捷网站、小说搜索源、桌面浮动球</li>
+              <li>每个分类都有"恢复默认"，不怕改坏</li>
+            </ul>
+            <p style="margin-bottom:4px;"><b>常见问题</b>：</p>
+            <ul style="margin-top:0;padding-left:18px;">
+              <li>老板键没反应？可能跟别的软件冲突，去设置换个键</li>
+              <li>倍速不管用？部分网站不支持，B站等大网站可以</li>
+              <li>小说搜不到？换个关键词，或用"快速搜索"直接去网站搜</li>
+              <li>窗口太透明？点透明度按钮调回来，或 Alt+滚轮调</li>
+            </ul>
+            <p style="color:#999;font-size:11px;margin-top:12px;line-height:1.6;">作者：嘉豪<br/>这个是从github上参考了很多大佬的代码，在此感谢各位大佬。功能还未完善，后续会尽我所能修改，希望大家可以用的舒服。</p>
+          </div>
+          <div class="actions" style="flex-shrink:0;"><button id="helpClose" class="primary">知道了</button></div>
+        </div>
+      </div>
+
+      <!-- 设置 -->
+      <div id="setModal" class="modal">
+        <div class="panel" style="max-height:80vh;display:flex;flex-direction:column;">
+          <h3 style="flex-shrink:0;">设置</h3>
+          <div id="setContent" style="flex:1;overflow-y:auto;padding-right:4px;">
+
+          <div class="section-title">背景图片</div>
+          <div class="bg-preview" id="bgPreview"></div>
+          <div class="bg-actions">
+            <button id="selectBg" class="primary">选择图片</button>
+            <button id="clearBg">恢复纯白</button>
+          </div>
+
+          <div class="section-title">快速搜索源</div>
+          <p style="font-size:11px;color:#999;margin-bottom:6px;">格式：名称 + 搜索URL，{k} 会替换为关键词。例：七猫小说 | https://www.qimao.com/search/?keyword={k}</p>
+          <div id="quickSourceList" style="margin-bottom:8px;"></div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;">
+            <input id="newSourceName" type="text" placeholder="名称" style="flex:1;padding:4px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:4px;font-size:11px;" />
+            <input id="newSourceUrl" type="text" placeholder="URL（含{k}）" style="flex:2;padding:4px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:4px;font-size:11px;" />
+            <button id="addQuickSource" class="primary" style="padding:4px 8px;font-size:11px;">添加</button>
+          </div>
+          <button id="resetQuickSources" style="width:100%;padding:4px;font-size:11px;">恢复默认源</button>
+
+          <div class="section-title">顶栏按钮</div>
+          <div class="toggle-grid">
+            <div class="row"><input type="checkbox" id="tb_quickSite" /><label for="tb_quickSite">快捷网站</label></div>
+            <div class="row"><input type="checkbox" id="tb_speed" /><label for="tb_speed">倍速</label></div>
+            <div class="row"><input type="checkbox" id="tb_mute" /><label for="tb_mute">静音/音量</label></div>
+            <div class="row"><input type="checkbox" id="tb_opacity" /><label for="tb_opacity">透明度</label></div>
+            <div class="row"><input type="checkbox" id="tb_help" /><label for="tb_help">说明按钮</label></div>
+          </div>
+
+          <div class="section-title">热键</div>
+          <p style="font-size:11px;color:#999;margin-bottom:4px;">格式：<kbd>Alt+H</kbd>、<kbd>Control+Shift+H</kbd>、<kbd>F12</kbd>、<kbd>`</kbd></p>
+          <p style="font-size:11px;color:#4299e1;margin-bottom:6px;">隐身=全局热键（任何时候生效），其余=应用内热键（仅小窗内、非输入框时生效，不影响打字）</p>
+          <div class="row"><label>隐身</label><input id="hkHide" type="text" /></div>
+          <div class="row"><label>去顶栏</label><input id="hkChrome" type="text" /></div>
+          <div class="row"><label>置顶</label><input id="hkPin" type="text" /></div>
+          <div class="row"><label>目录</label><input id="hkToc" type="text" /></div>
+          <div class="row"><label>说明书</label><input id="hkHelp" type="text" /></div>
+
+          <div class="section-title">外观</div>
+          <div class="row"><label>窗口标题</label><input id="customTitle" type="text" placeholder="小窗" /></div>
+          <div class="row">
+            <label>小说字体</label>
+            <select id="novelFont">
+              <option value="Microsoft YaHei">微软雅黑</option>
+              <option value="SimSun">宋体</option>
+              <option value="SimHei">黑体</option>
+              <option value="KaiTi">楷体</option>
+              <option value="FangSong">仿宋</option>
+              <option value="serif">Serif</option>
+              <option value="sans-serif">Sans-serif</option>
+              <option value="monospace">等宽</option>
+            </select>
+          </div>
+
+          <div class="section-title">快捷网站</div>
+          <p style="font-size:11px;color:#999;margin-bottom:4px;">每行一个，格式：名称,网址</p>
+          <div class="row"><label style="align-self:flex-start;padding-top:5px;">网站列表</label><textarea id="customSites" rows="5"></textarea></div>
+
+          <div class="section-title">小说搜索源</div>
+          <p style="font-size:11px;color:#999;margin-bottom:4px;">开放可扩展，JSON 格式，{k} 会替换为搜索关键词</p>
+          <p style="font-size:11px;color:#4299e1;margin-bottom:4px;">格式：[{"name":"源名","url":"主页","searchUrl":"搜索URL含{k}"}]</p>
+          <div class="row"><label style="align-self:flex-start;padding-top:5px;">自定义源</label><textarea id="customSearchSources" rows="4" placeholder='[{"name":"我的源","url":"https://...","searchUrl":"https://.../search?q={k}"}]'></textarea></div>
+          <div class="row" style="gap:6px;">
+            <button id="importSearchSrc" style="flex:1;padding:4px;font-size:11px;">导入JSON</button>
+            <button id="exportSearchSrc" style="flex:1;padding:4px;font-size:11px;">导出JSON</button>
+            <button id="resetSearchSrc" style="flex:1;padding:4px;font-size:11px;">清空自定义</button>
+          </div>
+
+          <div class="section-title">其他</div>
+          <div class="row">
+            <label style="width:auto;">防老板透明</label>
+            <input id="bossTransparent" type="checkbox" />
+            <span class="hint">失焦自动变透明</span>
+          </div>
+          <div class="row" style="display:none;">
+            <label style="width:auto;">桌面浮动球</label>
+            <input id="floatBall" type="checkbox" />
+            <span class="hint">隐身后桌面留小球，点击恢复</span>
+          </div>
+          <div class="row">
+            <label style="width:auto;">媒体控制栏</label>
+            <input id="mediaControls" type="checkbox" />
+            <span class="hint">顶栏显示播放/暂停按钮</span>
+          </div>
+          <div class="row">
+            <label>透明程度</label>
+            <input id="bossOpacity" type="range" min="10" max="80" value="25" style="flex:1;accent-color:#4299e1;" />
+            <span id="bossOpacityVal" class="hint">25%</span>
+          </div>
+          <div class="row">
+            <label style="width:auto;">隐藏滚动条</label>
+            <input id="hideScrollbar" type="checkbox" />
+            <span class="hint">网页更清爽</span>
+          </div>
+          <div class="row">
+            <label style="width:auto;">夜间模式</label>
+            <input id="darkMode" type="checkbox" />
+            <span class="hint">网页反色护眼</span>
+          </div>
+          <div class="row">
+            <label style="width:auto;">自动刷新</label>
+            <select id="autoRefresh">
+              <option value="0">关闭</option>
+              <option value="30">30秒</option>
+              <option value="60">1分钟</option>
+              <option value="300">5分钟</option>
+              <option value="600">10分钟</option>
+            </select>
+          </div>
+          <div class="row">
+            <label style="width:auto;">显示任务栏图标</label>
+            <input id="showTaskbar" type="checkbox" />
+            <span class="hint">开启后可 Alt+Tab 切换</span>
+          </div>
+          <div class="row">
+            <label style="width:auto;">鼠标穿透</label>
+            <input id="ignoreMouse" type="checkbox" />
+            <span class="hint">窗口不挡点击，按隐身热键恢复</span>
+          </div>
+
+          </div>
+          <div class="actions" style="flex-shrink:0;margin-top:12px;">
+            <button id="hkReset">恢复默认</button>
+            <button id="setClose">取消</button>
+            <button id="hkSave" class="primary">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 收藏夹下拉 -->
+      <div id="favDropdown" class="dropdown">
+        <div class="dropdown-header">
+          <span>收藏夹</span>
+          <button id="addFavBtn" class="primary" style="padding:2px 8px;font-size:11px;">收藏当前页</button>
+        </div>
+        <div id="favList" class="dropdown-list"></div>
+      </div>
+
+      <!-- 历史记录下拉 -->
+      <div id="histDropdown" class="dropdown">
+        <div class="dropdown-header">
+          <span>历史记录</span>
+          <button id="clearHistBtn" style="padding:2px 8px;font-size:11px;">清空</button>
+        </div>
+        <div id="histList" class="dropdown-list"></div>
+      </div>
+
+      <!-- 小说搜索面板 -->
+      <div id="searchPanel" class="dropdown" style="width:340px;max-height:420px;overflow-y:auto;">
+        <div class="dropdown-header">
+          <span>小说TXT搜索</span>
+          <span id="searchBack" style="cursor:pointer;color:#4299e1;font-size:11px;display:none;">← 返回</span>
+        </div>
+        <div style="padding:10px;">
+          <!-- 搜索模式切换 -->
+          <div style="display:flex;gap:4px;margin-bottom:8px;">
+            <button id="searchModeQuick" class="primary" style="flex:1;padding:4px;font-size:11px;">快速搜索</button>
+            <button id="searchModeBookSource" style="flex:1;padding:4px;font-size:11px;">书源解析</button>
+          </div>
+          <!-- 快速搜索区 -->
+          <div id="quickSearchArea">
+            <select id="quickSearchSource" style="width:100%;padding:4px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-size:12px;margin-bottom:6px;"></select>
+            <input id="quickSearchKeyword" type="text" placeholder="输入书名搜索" style="width:100%;padding:6px 8px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-size:12px;box-sizing:border-box;margin-bottom:6px;" />
+            <button id="quickSearchBtn" class="primary" style="width:100%;padding:6px;font-size:12px;">搜索</button>
+            <p style="font-size:10px;color:#999;margin-top:6px;">直接跳转到网站搜索页，在网页里看小说</p>
+          </div>
+          <!-- 书源搜索区 -->
+          <div id="bookSourceSearchArea" style="display:none;">
+            <select id="bookSource" style="width:100%;padding:4px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-size:12px;margin-bottom:6px;"></select>
+            <input id="searchKeyword" type="text" placeholder="输入书名搜索" style="width:100%;padding:6px 8px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-size:12px;box-sizing:border-box;margin-bottom:6px;" />
+            <button id="doSearch" class="primary" style="width:100%;padding:6px;font-size:12px;">搜索</button>
+            <p style="font-size:10px;color:#999;margin-top:6px;">解析书源，直接在阅读器里看正文（部分老书源可能失效）</p>
+          </div>
+          <!-- 搜索结果 -->
+          <div id="searchResults" style="margin-top:8px;display:none;"></div>
+          <!-- 章节列表 -->
+          <div id="chapterList" style="margin-top:8px;display:none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const view = $('view');
+    let mode = 'web';
+    let novel = null;
+    let chap = 0;
+    let fontSize = 17;
+    let novelFont = 'Microsoft YaHei';
+    let speed = 1;
+    let pageZoom = 1;
+    let progressKey = '';
+    let hotkeys = {};
+    let defaults = {};
+    let isMuted = false;
+    let customSites = [];
+    let toolbarCfg = {};
+    let welcomePath = '';
+    let backgroundImage = '';
+    let hideScrollbar = true;
+    let darkMode = false;
+    let autoRefresh = 0;
+    let autoRefreshTimer = null;
+    let bossTransparent = true;
+    let bossOpacity = 0.25;
+    let floatBall = false;
+    let mediaControls = false;
+    let splitMode = false;
+    let splitRatio = 0.5; // 左边占比
+    let favorites = [];
+    let history = [];
+    let searchSources = { novel: [] };
+    let customSearchSources = [];
+    let bookSources = [];
+    let currentBook = null;
+    let currentChapters = [];
+    let currentSourceIndex = 0;
+    let searchMode = 'quick'; // quick 或 bookSource
+    // 默认快速搜索源（直接跳转网站搜索页，保证能用）
+    const DEFAULT_QUICK_SOURCES = [
+      { name: '七猫小说', url: 'https://www.qimao.com/search/?keyword={k}' },
+      { name: '起点中文', url: 'https://www.qidian.com/search?kw={k}' },
+      { name: '晋江文学', url: 'https://www.jjwxc.net/search.php?kw={k}&t=1' },
+      { name: '零点看书', url: 'https://www.lingdiankanshu.co/ar.php?keyWord={k}' },
+      { name: '爱趣小说', url: 'http://m.aiquxs.la/ar.php?keyWord={k}' },
+      { name: '笔趣阁', url: 'https://www.biquge.lu/search?q={k}' },
+      { name: '百度小说', url: 'https://www.baidu.com/s?wd={k}+小说+TXT' },
+      { name: '搜狗搜索', url: 'https://www.sogou.com/web?query={k}+小说+TXT下载' }
+    ];
+    let quickSources = [...DEFAULT_QUICK_SOURCES]; // 当前使用的快速搜索源（默认+自定义）
+
+    function applyExtras() {
+      if (mode !== 'web') return;
+      let css = '';
+      if (hideScrollbar) {
+        css += '::-webkit-scrollbar{display:none!important}html,body{scrollbar-width:none!important;-ms-overflow-style:none!important}';
+      }
+      if (darkMode) {
+        css += 'html{filter:invert(1) hue-rotate(180deg)!important}img,video,canvas,svg,iframe{filter:invert(1) hue-rotate(180deg)!important}';
+      }
+      const js = `(function(){
+        var old=document.getElementById('pip-extras');
+        if(old)old.remove();
+        if(!${css ? 'true' : 'false'})return;
+        var s=document.createElement('style');
+        s.id='pip-extras';
+        s.textContent=${JSON.stringify(css)};
+        (document.head||document.documentElement).appendChild(s);
+      })();`;
+      try { view.executeJavaScript(js, false).catch(function(){}); } catch (e) {}
+    }
+
+    // 应用媒体控制栏显示
+    function applyMediaControls() {
+      const btn = $('mediaPlayBtn');
+      if (!btn) return;
+      if (mediaControls && mode === 'web') btn.classList.remove('hidden');
+      else btn.classList.add('hidden');
+    }
+
+    // 切换分屏模式
+    function toggleSplit() {
+      splitMode = !splitMode;
+      const container = $('splitContainer');
+      const divider = $('splitDivider');
+      const reader = $('reader');
+      const viewHost = $('viewHost');
+      // 关闭所有下拉面板
+      document.querySelectorAll('.dropdown.show').forEach(function(d) { d.classList.remove('show'); });
+      if (splitMode) {
+        container.classList.add('split');
+        divider.classList.remove('hidden');
+        viewHost.style.flex = '';
+        // 如果当前不是小说模式，reader 显示空状态
+        if (mode !== 'book') {
+          reader.classList.remove('hidden');
+          $('toc').classList.add('hidden');
+          $('novel').innerHTML = '<div class="split-empty"><div style="font-size:14px;font-weight:500;margin-bottom:8px;">右边看小说</div><div style="font-size:11px;opacity:0.7;">点顶栏文件夹按钮打开TXT，或搜索按钮搜小说</div></div>';
+        }
+        applySplitRatio();
+        setTimeout(relayoutWeb, 50);
+      } else {
+        // 退出分屏：彻底清理
+        container.classList.remove('split');
+        divider.classList.add('hidden');
+        viewHost.style.flex = '';
+        reader.style.background = '';
+        // 如果不是小说模式，隐藏 reader，并清除空状态内容
+        if (mode !== 'book') {
+          reader.classList.add('hidden');
+          // 只有当内容是空状态时才清除，避免清除用户正在看的小说
+          if ($('novel').querySelector('.split-empty')) {
+            $('novel').innerHTML = '';
+          }
+        }
+        setTimeout(relayoutWeb, 50);
+      }
+      $('splitBtn').classList.toggle('on', splitMode);
+    }
+
+    // 应用分屏比例
+    function applySplitRatio() {
+      const viewHost = $('viewHost');
+      const pct = Math.max(0.2, Math.min(0.8, splitRatio)) * 100;
+      viewHost.style.flex = '0 0 ' + pct + '%';
+    }
+
+    // 分隔条拖动（用 pointer 事件，更稳定）
+    function initSplitDrag() {
+      const divider = $('splitDivider');
+      const container = $('splitContainer');
+      let dragging = false;
+
+      divider.addEventListener('pointerdown', function(e) {
+        dragging = true;
+        e.preventDefault();
+        divider.setPointerCapture(e.pointerId);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+      });
+
+      divider.addEventListener('pointermove', function(e) {
+        if (!dragging) return;
+        const rect = container.getBoundingClientRect();
+        splitRatio = Math.max(0.2, Math.min(0.8, (e.clientX - rect.left) / rect.width));
+        applySplitRatio();
+      });
+
+      function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        try { divider.releasePointerCapture(e.pointerId); } catch(err) {}
+      }
+      divider.addEventListener('pointerup', endDrag);
+      divider.addEventListener('pointercancel', endDrag);
+    }
+
+    function restartAutoRefresh() {
+      if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+      if (autoRefresh > 0 && mode === 'web') {
+        autoRefreshTimer = setInterval(function() {
+          try { view.reload(); } catch (e) {}
+        }, autoRefresh * 1000);
+      }
+    }
+
+    function applyBackground() {
+      if (backgroundImage) {
+        document.body.classList.add('has-bg');
+        document.body.style.backgroundImage = `url("${backgroundImage}")`;
+        $('bgPreview').style.backgroundImage = `url("${backgroundImage}")`;
+      } else {
+        document.body.classList.remove('has-bg');
+        document.body.style.backgroundImage = '';
+        $('bgPreview').style.backgroundImage = '';
+        $('bgPreview').style.background = 'rgba(0,0,0,0.03)';
+      }
+    }
+
+    function relayoutWeb() {
+      const host = $('viewHost');
+      if (!host || mode !== 'web') return;
+      view.style.width = host.clientWidth + 'px';
+      view.style.height = host.clientHeight + 'px';
+    }
+
+    function setMode(m) {
+      mode = m;
+      $('viewHost').classList.toggle('hidden', m !== 'web' && !splitMode);
+      $('reader').classList.toggle('hidden', m !== 'book' && !splitMode);
+      $('player').classList.toggle('hidden', m !== 'video');
+      $('fontUp').classList.toggle('hidden', m !== 'book');
+      $('fontDown').classList.toggle('hidden', m !== 'book');
+      $('tocBtn').classList.toggle('hidden', m !== 'book');
+      $('speed').style.display = (toolbarCfg.speed && (m === 'web' || m === 'video')) ? '' : 'none';
+      if (m === 'web') { setTimeout(relayoutWeb, 0); restartAutoRefresh(); }
+      else { if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; } }
+      applyMediaControls();
+    }
+
+    function applyToolbar() {
+      $('quickSite').style.display = toolbarCfg.quickSite ? '' : 'none';
+      $('speed').style.display = (toolbarCfg.speed && (mode === 'web' || mode === 'video')) ? '' : 'none';
+      $('muteGroup').style.display = toolbarCfg.mute ? '' : 'none';
+      $('opacityGroup').style.display = toolbarCfg.opacity ? '' : 'none';
+      $('helpBtn').style.display = toolbarCfg.help ? '' : 'none';
+    }
+
+    function normalizeUrl(raw) {
+      const s = String(raw || '').trim();
+      if (!s) return '';
+      if (/^https?:\/\//i.test(s) || /^file:/i.test(s)) return s;
+      const key = s.toLowerCase().replace(/\s+/g, '');
+      const aliases = {
+        '哔哩哔哩': 'https://www.bilibili.com', 'bilibili': 'https://www.bilibili.com',
+        'b站': 'https://www.bilibili.com', 'bili': 'https://www.bilibili.com',
+        '百度': 'https://www.baidu.com', 'baidu': 'https://www.baidu.com',
+        'youtube': 'https://www.youtube.com', 'yt': 'https://www.youtube.com',
+        '知乎': 'https://www.zhihu.com', 'zhihu': 'https://www.zhihu.com'
+      };
+      if (aliases[key] || aliases[s]) return aliases[key] || aliases[s];
+      if (/^[\w.-]+\.[a-z]{2,}(\/.*)?$/i.test(s)) return 'https://' + s;
+      return 'https://www.baidu.com/s?wd=' + encodeURIComponent(s);
+    }
+
+    function goHome() {
+      setMode('web');
+      view.src = 'file:///' + encodeURI(welcomePath.replace(/\\/g, '/'));
+      $('url').value = '';
+    }
+
+    function applySpeed() {
+      if (mode === 'video') { $('video').playbackRate = speed; return; }
+      if (mode !== 'web') return;
+      // 主进程 set-speed 会遍历所有 webContents（包括 iframe）应用倍速
+      window.stealth.setSpeed(speed);
+    }
+
+    function adCss() {
+      const css = `
+        /* 只隐藏明确的广告类名，不碰正常内容 */
+        .adsbygoogle, .adsense, .adunit, .advertisement, .advertising,
+        .ad-banner, .ad-banner, .ad-float, .ad-popup, .ad-modal,
+        .ad-side, .ad-top, .ad-bottom, .ad-left, .ad-right,
+        .ad-list, .ad-item, .ad-box, .ad-wrap, .ad-container,
+        .ad-content, .ad-placeholder, .ad-slot, .ad-report,
+        .bili-ad, .slide-ad, .banner-card, [class*="ad-floor"],
+        .bd-ad, .ggao, .guanggao, .app-download, .app-promo,
+        .ec_wise_ad, .ec-recommend, .ad-widget,
+        [data-ad], [data-ad-client], [data-ad-slot], [data-ad-format],
+        iframe[src*="doubleclick"], iframe[src*="googlesyndication"],
+        iframe[src*="adservice"], iframe[src*="adnxs"], iframe[src*="criteo"],
+        ins.adsbygoogle { display: none !important; }
+      `;
+      const js = `(function(){
+        if (window.__pipAdBlockInstalled) return;
+        window.__pipAdBlockInstalled = true;
+        var s = document.createElement('style');
+        s.id = 'pip-adblock';
+        s.textContent = ${JSON.stringify(css)};
+        (document.head || document.documentElement).appendChild(s);
+        // MutationObserver 动态隐藏新出现的广告
+        var observer = new MutationObserver(function(mutations) {
+          mutations.forEach(function(m) {
+            m.addedNodes.forEach(function(node) {
+              if (node.nodeType !== 1) return;
+              var text = (node.innerText || node.textContent || '').trim();
+              if (text.length > 0 && text.length < 20) {
+                if (/^(广告|推广|赞助|AD|Advertisement)$/i.test(text)) {
+                  node.style.display = 'none';
+                }
+              }
+              // 隐藏 iframe 广告
+              if (node.tagName === 'IFRAME' && node.src) {
+                if (/doubleclick|googlesyndication|adservice|adnxs|criteo|taboola|outbrain/i.test(node.src)) {
+                  node.style.display = 'none';
+                }
+              }
+            });
+          });
+        });
+        observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+      })();`;
+      try { view.executeJavaScript(js, false).catch(function(){}); } catch (e) {}
+    }
+
+    function restoreZoom() {
+      try { view.setZoomFactor(pageZoom); } catch (e) {}
+    }
+
+    function sitesToText(sites) {
+      return (sites || []).map(function(s) { return s.name + ',' + s.url; }).join('\n');
+    }
+    function textToSites(text) {
+      const lines = String(text || '').split('\n');
+      const result = [];
+      lines.forEach(function(line) {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        const parts = trimmed.split(/[,，]/);
+        if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+          let url = parts[1].trim();
+          if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+          result.push({ name: parts[0].trim(), url: url });
+        }
+      });
+      return result;
+    }
+
+    function refreshQuickSite() {
+      const sel = $('quickSite');
+      sel.innerHTML = '<option value="">快捷</option>';
+      (customSites || []).forEach(function(s) {
+        const opt = document.createElement('option');
+        opt.value = s.url;
+        opt.textContent = s.name;
+        sel.appendChild(opt);
+      });
+    }
+
+    function toggleMute() {
+      isMuted = !isMuted;
+      window.stealth.setMuted(isMuted);
+      const btn = $('muteBtn');
+      if (isMuted) {
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+      } else {
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+      }
+      btn.classList.toggle('muted', isMuted);
+    }
+
+    // 暂停 webview 里所有视频 + 静音（老板键用，主进程已处理，这里保留备用）
+    function pauseAllMedia() {
+      if (mode === 'video') {
+        try { $('video').pause(); $('video').muted = true; } catch (e) {}
+      }
+    }
+
+    // ===== 收藏夹 =====
+    function renderFavorites() {
+      const list = $('favList');
+      if (!favorites.length) {
+        list.innerHTML = '<div class="dropdown-empty">还没有收藏，点击上方按钮收藏当前页</div>';
+        return;
+      }
+      list.innerHTML = favorites.map(function(f, i) {
+        return '<div class="dropdown-item" data-url="' + f.url + '">' +
+          '<span class="title" title="' + f.name + '">' + f.name + '</span>' +
+          '<span class="del" data-idx="' + i + '">删除</span></div>';
+      }).join('');
+      list.querySelectorAll('.dropdown-item').forEach(function(item) {
+        item.onclick = function(e) {
+          if (e.target.classList.contains('del')) {
+            const idx = Number(e.target.dataset.idx);
+            const url = favorites[idx].url;
+            window.stealth.removeFavorite(url).then(function(favs) {
+              favorites = favs; renderFavorites();
+            });
+          } else {
+            const url = item.dataset.url;
+            $('favDropdown').classList.remove('show');
+            setMode('web'); view.src = url; $('url').value = url; window.stealth.saveUrl(url);
+          }
+        };
+      });
+    }
+    function addCurrentToFavorites() {
+      if (mode !== 'web') return;
+      const url = view.getURL();
+      if (!url || url.startsWith('file:')) return;
+      const title = view.getTitle() || url;
+      window.stealth.addFavorite({ name: title, url: url }).then(function(favs) {
+        favorites = favs; renderFavorites();
+      });
+    }
+
+    // ===== 历史记录 =====
+    function renderHistory() {
+      const list = $('histList');
+      if (!history.length) {
+        list.innerHTML = '<div class="dropdown-empty">暂无浏览记录</div>';
+        return;
+      }
+      list.innerHTML = history.map(function(h) {
+        const time = new Date(h.time).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        return '<div class="dropdown-item" data-url="' + h.url + '">' +
+          '<span class="title" title="' + h.title + '">' + h.title + '</span>' +
+          '<span style="color:#999;font-size:10px;margin-left:8px;">' + time + '</span></div>';
+      }).join('');
+      list.querySelectorAll('.dropdown-item').forEach(function(item) {
+        item.onclick = function() {
+          const url = item.dataset.url;
+          $('histDropdown').classList.remove('show');
+          setMode('web'); view.src = url; $('url').value = url; window.stealth.saveUrl(url);
+        };
+      });
+    }
+    function addToHistory(url, title) {
+      if (!url || url.startsWith('file:') || url.indexOf('welcome.html') >= 0) return;
+      window.stealth.addHistory({ url: url, title: title || url }).then(function(h) {
+        history = h;
+      });
+    }
+
+    // 渲染搜索源下拉菜单
+    function renderSearchSources() {
+      const sel = $('searchSource');
+      const sources = searchSources.novel || [];
+      sel.innerHTML = sources.map(function(s, i) {
+        return '<option value="' + i + '">' + s.name + '</option>';
+      }).join('');
+    }
+
+    // 渲染搜索结果
+    function renderSearchResults(results) {
+      $('searchArea').style.display = 'none';
+      $('searchResults').style.display = 'block';
+      $('searchBack').style.display = 'inline';
+      $('searchResults').innerHTML = results.map(function(book, i) {
+        return '<div class="search-result-item" data-index="' + i + '" style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.05);cursor:pointer;">' +
+          '<div style="font-size:13px;font-weight:600;">' + escapeHtml(book.name) + '</div>' +
+          '<div style="font-size:11px;color:#999;margin-top:2px;">' + escapeHtml(book.author || '未知作者') + ' · ' + escapeHtml(book.source) + '</div>' +
+          '</div>';
+      }).join('');
+      // 绑定点击事件
+      document.querySelectorAll('.search-result-item').forEach(function(el) {
+        el.onclick = function() {
+          const idx = Number(el.getAttribute('data-index'));
+          currentBook = results[idx];
+          loadChapters(currentBook.url);
+        };
+      });
+    }
+
+    // 统一搜索结果渲染（带封面、作者、简介、来源）
+    let unifiedResults = [];
+    function renderUnifiedSearchResults(results) {
+      unifiedResults = results;
+      $('bookSourceSearchArea').style.display = 'none';
+      $('searchResults').style.display = 'block';
+      $('searchBack').style.display = 'inline';
+      $('searchResults').innerHTML = results.map(function(book, i) {
+        const coverHtml = book.cover ? '<img src="' + book.cover + '" style="width:50px;height:66px;object-fit:cover;border-radius:4px;margin-right:10px;flex-shrink:0;" onerror="this.style.display=\'none\'" />' : '';
+        return '<div class="unified-result-item" data-index="' + i + '" style="display:flex;padding:10px;border-bottom:1px solid rgba(0,0,0,0.05);cursor:pointer;">' +
+          coverHtml +
+          '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(book.name) + '</div>' +
+          '<div style="font-size:11px;color:#666;margin-top:2px;">' + escapeHtml(book.author || '未知作者') + ' · <span style="color:#4299e1;">' + escapeHtml(book.sourceName || book.source || '') + '</span></div>' +
+          (book.intro ? '<div style="font-size:11px;color:#999;margin-top:4px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + escapeHtml(book.intro.substring(0, 100)) + '</div>' : '') +
+          '</div></div>';
+      }).join('');
+      // 绑定点击事件
+      document.querySelectorAll('.unified-result-item').forEach(function(el) {
+        el.onclick = function() {
+          const idx = Number(el.getAttribute('data-index'));
+          currentBook = unifiedResults[idx];
+          loadUnifiedChapters(currentBook);
+        };
+      });
+    }
+
+    // 加载统一书源的章节列表
+    async function loadUnifiedChapters(book) {
+      $('searchResults').style.display = 'none';
+      $('chapterList').style.display = 'block';
+      $('chapterList').innerHTML = '<div style="padding:20px;text-align:center;color:#999;font-size:12px;">加载目录中...</div>';
+      try {
+        const result = await window.stealth.novelChapters(book);
+        if (result.ok && result.chapters && result.chapters.length > 0) {
+          currentChapters = result.chapters;
+          $('chapterList').innerHTML = '<div style="max-height:300px;overflow-y:auto;">' +
+            result.chapters.map(function(ch, i) {
+              return '<div class="chapter-item" data-index="' + i + '" style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.05);cursor:pointer;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(ch.title || ('第' + (i+1) + '章')) + '</div>';
+            }).join('') +
+            '</div>' +
+            '<div style="padding:8px;border-top:1px solid rgba(0,0,0,0.1);"><button id="exportTxtBtn" class="primary" style="width:100%;padding:6px;font-size:12px;">导出全本TXT</button></div>';
+          // 绑定章节点击
+          document.querySelectorAll('.chapter-item').forEach(function(el) {
+            el.onclick = function() {
+              const idx = Number(el.getAttribute('data-index'));
+              loadUnifiedContent(book, currentChapters[idx]);
+            };
+          });
+          // 绑定导出按钮
+          $('exportTxtBtn').onclick = async function() {
+            if (!confirm('确定导出全本TXT？可能需要较长时间')) return;
+            this.textContent = '导出中...';
+            this.disabled = true;
+            try {
+              const r = await window.stealth.novelExport(book, currentChapters);
+              if (r.ok) {
+                alert('导出成功！\n保存路径: ' + r.path + '\n大小: ' + (r.size / 1024).toFixed(1) + ' KB');
+              } else {
+                alert('导出失败: ' + r.error);
+              }
+            } catch (e) {
+              alert('导出出错: ' + e.message);
+            }
+            this.textContent = '导出全本TXT';
+            this.disabled = false;
+          };
+        } else {
+          $('chapterList').innerHTML = '<div style="padding:20px;text-align:center;color:#999;font-size:12px;">加载目录失败: ' + (result.error || '未知错误') + '</div>';
+        }
+      } catch (e) {
+        $('chapterList').innerHTML = '<div style="padding:20px;text-align:center;color:#999;font-size:12px;">加载目录出错: ' + e.message + '</div>';
+      }
+    }
+
+    // 加载统一书源的章节正文
+    async function loadUnifiedContent(book, chapter) {
+      $('searchPanel').classList.remove('show');
+      setMode('book');
+      $('toc').classList.add('hidden');
+      $('novel').innerHTML = '<div style="padding:40px;text-align:center;color:#999;">加载中...</div>';
+      try {
+        const result = await window.stealth.novelContent(book, chapter);
+        if (result.ok) {
+          $('novel').innerHTML = '<h2 style="text-align:center;margin-bottom:20px;">' + escapeHtml(chapter.title || '') + '</h2>' +
+            result.content.split('\n').map(function(p) { return p.trim() ? '<p style="margin-bottom:12px;text-indent:2em;">' + escapeHtml(p) + '</p>' : ''; }).join('');
+          $('novel').scrollTop = 0;
+          // 保存阅读进度
+          try { window.stealth.saveProgress(book.id || book.name, { chapter: chapter.title || chapter.index, offset: 0 }); } catch(e) {}
+        } else {
+          $('novel').innerHTML = '<div style="padding:40px;text-align:center;color:#999;">加载失败: ' + result.error + '</div>';
+        }
+      } catch (e) {
+        $('novel').innerHTML = '<div style="padding:40px;text-align:center;color:#999;">加载出错: ' + e.message + '</div>';
+      }
+    }
+
+    // 加载章节列表
+    async function loadChapters(bookUrl) {
+      $('searchResults').style.display = 'none';
+      $('chapterList').style.display = 'block';
+      $('searchBack').style.display = 'inline';
+      $('chapterList').innerHTML = '<div style="padding:20px;text-align:center;color:#999;font-size:12px;">加载章节中...</div>';
+      try {
+        const result = await window.stealth.getChapters(currentSourceIndex, bookUrl);
+        if (result.ok && result.chapters.length > 0) {
+          $('chapterList').innerHTML = '<div style="font-size:12px;color:#666;margin-bottom:6px;">共 ' + result.chapters.length + ' 章</div>' +
+            result.chapters.map(function(ch, i) {
+              return '<div class="chapter-item" data-index="' + i + '" style="padding:6px 4px;border-bottom:1px solid rgba(0,0,0,0.04);cursor:pointer;font-size:12px;">' +
+                escapeHtml(ch.title) + '</div>';
+            }).join('');
+          document.querySelectorAll('.chapter-item').forEach(function(el) {
+            el.onclick = function() {
+              const idx = Number(el.getAttribute('data-index'));
+              openChapter(result.chapters, idx);
+            };
+          });
+        } else {
+          $('chapterList').innerHTML = '<div style="padding:10px;text-align:center;color:#999;font-size:12px;">' + (result.error ? '加载失败: ' + result.error : '无章节') + '</div>';
+        }
+      } catch (e) {
+        $('chapterList').innerHTML = '<div style="padding:10px;text-align:center;color:#999;font-size:12px;">出错: ' + e.message + '</div>';
+      }
+    }
+
+    // 打开章节（创建完整目录，按需加载正文）
+    async function openChapter(chapterList, startIndex) {
+      $('searchPanel').classList.remove('show');
+      // 构造 novel 对象：所有章节标题，内容为空（懒加载）
+      novel = {
+        title: currentBook ? currentBook.name : '在线小说',
+        chapters: chapterList.map(function(ch) {
+          return { title: ch.title, lines: null, _url: ch.url, _loaded: false };
+        })
+      };
+      progressKey = 'online_' + (currentBook ? currentBook.name : 'novel');
+      setMode('book');
+      $('url').value = novel.title;
+      // 渲染目录
+      const toc = $('toc');
+      toc.classList.remove('hidden');
+      toc.innerHTML = '<div class="h">目录 ' + novel.chapters.length + '</div>';
+      novel.chapters.forEach(function(c, i) {
+        const el = document.createElement('div');
+        el.className = 'i';
+        el.textContent = c.title;
+        el.onclick = function() { showChap(i, 0); };
+        toc.appendChild(el);
+      });
+      document.title = novel.title;
+      // 加载并显示起始章节
+      await loadOnlineChapter(startIndex);
+      showChap(startIndex, 0);
+    }
+
+    // 加载在线小说章节正文
+    async function loadOnlineChapter(index) {
+      if (!novel || !novel.chapters || !novel.chapters[index]) return;
+      const c = novel.chapters[index];
+      if (c._loaded || !c._url) return;
+      c._loaded = true; // 标记为已加载（防止重复加载）
+      try {
+        const result = await window.stealth.getChapterContent(currentSourceIndex, c._url);
+        if (result.ok && result.content) {
+          c.lines = result.content.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
+        } else {
+          c.lines = ['（加载失败: ' + (result.error || '未知错误') + '）'];
+        }
+      } catch (e) {
+        c.lines = ['（加载出错: ' + e.message + '）'];
+        c._loaded = false; // 失败后允许重试
+      }
+    }
+
+    function showChap(i, ratio) {
+      chap = Math.max(0, Math.min(novel.chapters.length - 1, i));
+      const c = novel.chapters[chap];
+      const box = $('novel');
+      box.style.fontSize = fontSize + 'px';
+      box.style.fontFamily = novelFont;
+      // 在线小说懒加载：内容为空时先显示加载中，然后异步拉正文
+      if (c.lines === null || c.lines === undefined) {
+        box.innerHTML = '<div class="t"></div>';
+        box.querySelector('.t').textContent = c.title;
+        const loading = document.createElement('div');
+        loading.className = 'p';
+        loading.textContent = '加载中...';
+        loading.style.color = '#999';
+        box.appendChild(loading);
+        // 异步加载正文
+        loadOnlineChapter(chap).then(function() {
+          if (chap === i) showChap(i, 0); // 加载完成后重新显示
+        });
+        return;
+      }
+      box.innerHTML = '<div class="t"></div>';
+      box.querySelector('.t').textContent = c.title;
+      (c.lines || []).forEach(function(line) {
+        const d = document.createElement('div');
+        d.className = 'p';
+        d.textContent = String(line || '').trim();
+        if (!d.textContent) d.style.height = '0.6em';
+        box.appendChild(d);
+      });
+      Array.prototype.forEach.call($('toc').querySelectorAll('.i'), function(el, idx) {
+        el.classList.toggle('on', idx === chap);
+      });
+      requestAnimationFrame(function() {
+        const max = Math.max(1, box.scrollHeight - box.clientHeight);
+        box.scrollTop = typeof ratio === 'number' ? max * ratio : 0;
+        saveProg();
+      });
+    }
+
+    function saveProg() {
+      if (!novel || !progressKey) return;
+      const el = $('novel');
+      const max = Math.max(1, el.scrollHeight - el.clientHeight);
+      window.stealth.saveProgress(progressKey, { chap: chap, ratio: el.scrollTop / max, fontSize: fontSize, novelFont: novelFont });
+    }
+
+    function openBook(data) {
+      if (!data || data.error) { if (data && data.error) alert(data.error); return; }
+      novel = data;
+      progressKey = data.filePath || data.title;
+      setMode('book');
+      $('url').value = data.title || '';
+      const toc = $('toc');
+      toc.classList.remove('hidden');
+      toc.innerHTML = '<div class="h">目录 ' + data.chapters.length + '</div>';
+      data.chapters.forEach(function(c, i) {
+        const el = document.createElement('div');
+        el.className = 'i';
+        el.textContent = c.title;
+        el.onclick = function() { showChap(i, 0); };
+        toc.appendChild(el);
+      });
+      window.stealth.loadProgress(progressKey).then(function(p) {
+        if (p) {
+          fontSize = p.fontSize || fontSize;
+          novelFont = p.novelFont || novelFont;
+          showChap(p.chap || 0, p.ratio || 0);
+        } else showChap(0, 0);
+      });
+    }
+
+    function openLocalVideo(filePath) {
+      setMode('video');
+      $('url').value = filePath;
+      $('video').src = 'file:///' + String(filePath).replace(/\\/g, '/');
+      $('video').playbackRate = speed;
+      $('video').play().catch(function(){});
+    }
+
+    let chromeOff = false;
+    let chromeHoverTimer = null;
+
+    // 热键匹配：判断按键事件是否匹配配置的热键字符串（如 "Control+T"、"Alt+H"、"F12"）
+    function matchHotkey(e, hotkeyStr) {
+      if (!hotkeyStr || !e) return false;
+      var parts = String(hotkeyStr).split('+').map(function(s) { return s.trim().toLowerCase(); });
+      var key = parts.pop();
+      var needCtrl = parts.indexOf('control') >= 0 || parts.indexOf('ctrl') >= 0;
+      var needAlt = parts.indexOf('alt') >= 0;
+      var needShift = parts.indexOf('shift') >= 0;
+      if (needCtrl !== !!e.ctrlKey) return false;
+      if (needAlt !== !!e.altKey) return false;
+      if (needShift !== !!e.shiftKey) return false;
+      var eventKey = String(e.key || '').toLowerCase();
+      if (key === eventKey) return true;
+      var keyMap = { 'esc': 'escape', 'return': 'enter', 'space': ' ', 'spacebar': ' ' };
+      if (keyMap[key] === eventKey) return true;
+      if (e.code && String(e.code).toLowerCase() === key) return true;
+      return false;
+    }
+
+    // 应用内热键处理（只在小窗内生效，不拦截系统打字）
+    function handleAppHotkey(e) {
+      if (!e) return false;
+      if (matchHotkey(e, hotkeys.chrome)) { if (e.preventDefault) e.preventDefault(); toggleChrome(); return true; }
+      if (matchHotkey(e, hotkeys.pin)) { if (e.preventDefault) e.preventDefault(); $('pin').click(); return true; }
+      if (matchHotkey(e, hotkeys.toc)) { if (e.preventDefault) e.preventDefault(); toggleToc(); return true; }
+      if (matchHotkey(e, hotkeys.help)) { if (e.preventDefault) e.preventDefault(); showHelp(true); return true; }
+      return false;
+    }
+
+    // 热键录制：点击输入框后直接按组合键自动填入
+    function setupHotkeyRecorder() {
+      const ids = ['hkHide', 'hkChrome', 'hkPin', 'hkToc', 'hkHelp'];
+      let recordingInput = null;
+      let originalValue = '';
+      ids.forEach(function(id) {
+        const input = $(id);
+        if (!input) return;
+        input.addEventListener('focus', function() {
+          recordingInput = input;
+          originalValue = input.value;
+          input.value = '请按快捷键...';
+          input.select();
+        });
+        input.addEventListener('blur', function() {
+          if (recordingInput === input) {
+            if (input.value === '请按快捷键...') input.value = originalValue;
+            recordingInput = null;
+          }
+        });
+        input.addEventListener('keydown', function(e) {
+          if (recordingInput !== input) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.key === 'Escape') {
+            input.value = originalValue;
+            input.blur();
+            return;
+          }
+          if (e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift' || e.key === 'Meta') return;
+          var parts = [];
+          if (e.ctrlKey) parts.push('Control');
+          if (e.altKey) parts.push('Alt');
+          if (e.shiftKey) parts.push('Shift');
+          if (e.metaKey) parts.push('Meta');
+          var key = e.key;
+          if (key === ' ') key = 'Space';
+          else if (key.length === 1) key = key.toUpperCase();
+          parts.push(key);
+          input.value = parts.join('+');
+          input.blur();
+        });
+      });
+    }
+
+    function toggleChrome() {
+      chromeOff = !chromeOff;
+      document.getElementById('app').classList.toggle('chrome-off', chromeOff);
+      if (chromeHoverTimer) { clearTimeout(chromeHoverTimer); chromeHoverTimer = null; }
+    }
+    function toggleToc() { if (mode === 'book') $('toc').classList.toggle('hidden'); }
+    function showHelp(v) { $('helpModal').classList.toggle('show', !!v); }
+
+    function showSet(v) {
+      if (v) {
+        $('hkHide').value = hotkeys.hide || '';
+        $('hkChrome').value = hotkeys.chrome || '';
+        $('hkPin').value = hotkeys.pin || '';
+        $('hkToc').value = hotkeys.toc || '';
+        $('hkHelp').value = hotkeys.help || '';
+        $('customTitle').value = document.title || '小窗';
+        $('novelFont').value = novelFont;
+        $('customSites').value = sitesToText(customSites);
+        $('customSearchSources').value = JSON.stringify(customSearchSources, null, 2);
+        $('tb_quickSite').checked = !!toolbarCfg.quickSite;
+        $('tb_speed').checked = !!toolbarCfg.speed;
+        $('tb_mute').checked = !!toolbarCfg.mute;
+        $('tb_opacity').checked = !!toolbarCfg.opacity;
+        $('tb_help').checked = !!toolbarCfg.help;
+        $('hideScrollbar').checked = !!hideScrollbar;
+        $('darkMode').checked = !!darkMode;
+        $('autoRefresh').value = String(autoRefresh);
+        $('bossTransparent').checked = !!bossTransparent;
+        $('bossOpacity').value = String(Math.round(bossOpacity * 100));
+        $('bossOpacityVal').textContent = Math.round(bossOpacity * 100) + '%';
+        $('floatBall').checked = !!floatBall;
+        $('mediaControls').checked = !!mediaControls;
+        applyBackground();
+      }
+      $('setModal').classList.toggle('show', !!v);
+      if (v) initCollapsible();
+    }
+
+    // 设置面板折叠
+    let collapsibleInited = false;
+    function initCollapsible() {
+      if (collapsibleInited) return;
+      collapsibleInited = true;
+      // 给每个 section-title 动态加恢复默认按钮
+      const sectionNames = ['bg', 'quickSource', 'toolbar', 'hotkey', 'appearance', 'sites', 'searchSource', 'other'];
+      const titles = document.querySelectorAll('#setModal .section-title');
+      titles.forEach(function(t, i) {
+        const btn = document.createElement('button');
+        btn.className = 'section-reset';
+        btn.setAttribute('data-section', sectionNames[i] || 'unknown');
+        btn.textContent = '恢复默认';
+        btn.onclick = function(e) {
+          e.stopPropagation();
+          resetSection(this.getAttribute('data-section'));
+        };
+        t.appendChild(btn);
+      });
+      // 事件委托：点击 section-title 切换折叠
+      $('setModal').addEventListener('click', function(e) {
+        const title = e.target.closest('.section-title');
+        if (!title) return;
+        // 点击恢复默认按钮不触发折叠
+        if (e.target.closest('.section-reset')) return;
+        e.stopPropagation();
+        const collapsed = title.classList.toggle('collapsed');
+        // 隐藏/显示后面所有兄弟元素，直到下一个 section-title
+        let el = title.nextElementSibling;
+        while (el && !el.classList.contains('section-title')) {
+          el.style.display = collapsed ? 'none' : '';
+          el = el.nextElementSibling;
+        }
+      });
+      // 默认折叠不常用的 section（用 index 匹配，不用文本匹配，更可靠）
+      // 顺序：0背景图片 1快速搜索源 2顶栏按钮 3热键 4外观 5快捷网站 6小说搜索源 7其他
+      const collapsedIndexes = [3, 5, 6, 7]; // 热键、快捷网站、小说搜索源、其他
+      titles.forEach(function(t, i) {
+        if (collapsedIndexes.indexOf(i) >= 0) {
+          t.classList.add('collapsed');
+          let el = t.nextElementSibling;
+          while (el && !el.classList.contains('section-title')) {
+            el.style.display = 'none';
+            el = el.nextElementSibling;
+          }
+        }
+      });
+    }
+
+    // 恢复单个分类的默认设置
+    function resetSection(section) {
+      if (!confirm('确定恢复该分类的默认设置？')) return;
+      switch (section) {
+        case 'bg':
+          backgroundImage = '';
+          window.stealth.clearBackground();
+          applyBackground();
+          break;
+        case 'quickSource':
+          quickSources = [...DEFAULT_QUICK_SOURCES];
+          saveQuickSources();
+          renderQuickSourceList();
+          renderQuickSearchSources();
+          break;
+        case 'toolbar':
+          toolbarCfg = { quickSite: true, speed: true, mute: false, volume: false, opacity: true, help: false };
+          window.stealth.saveExtras({ toolbar: toolbarCfg });
+          applyToolbar();
+          $('tb_quickSite').checked = !!toolbarCfg.quickSite;
+          $('tb_speed').checked = !!toolbarCfg.speed;
+          $('tb_mute').checked = !!toolbarCfg.mute;
+          $('tb_opacity').checked = !!toolbarCfg.opacity;
+          $('tb_help').checked = !!toolbarCfg.help;
+          break;
+        case 'hotkey':
+          hotkeys = { hide: 'Alt+H', chrome: 'F12', pin: 'Control+T', toc: 'F8', help: 'F1' };
+          window.stealth.saveExtras({ hotkeys: hotkeys });
+          $('hkHide').value = hotkeys.hide;
+          $('hkChrome').value = hotkeys.chrome;
+          $('hkPin').value = hotkeys.pin;
+          $('hkToc').value = hotkeys.toc;
+          $('hkHelp').value = hotkeys.help;
+          break;
+        case 'appearance':
+          novelFont = 'Microsoft YaHei';
+          document.title = '小窗';
+          window.stealth.saveExtras({ novelFont: novelFont, customTitle: '小窗' });
+          $('novelFont').value = novelFont;
+          $('customTitle').value = '小窗';
+          if (mode === 'book') $('novel').style.fontFamily = novelFont;
+          break;
+        case 'sites':
+          customSites = null; // 用默认
+          window.stealth.saveExtras({ customSites: [] });
+          $('customSites').value = '';
+          break;
+        case 'searchSource':
+          customSearchSources = [];
+          window.stealth.saveSearchSources([]);
+          $('customSearchSources').value = '[]';
+          break;
+        case 'other':
+          bossTransparent = false;
+          floatBall = false;
+          mediaControls = false;
+          hideScrollbar = true;
+          darkMode = false;
+          autoRefresh = 0;
+          showTaskbar = false;
+          window.stealth.saveExtras({
+            bossTransparent: bossTransparent, floatBall: floatBall, mediaControls: mediaControls,
+            hideScrollbar: hideScrollbar, darkMode: darkMode, autoRefresh: autoRefresh, showTaskbar: showTaskbar
+          });
+          $('bossTransparent').checked = bossTransparent;
+          $('floatBall').checked = floatBall;
+          $('mediaControls').checked = mediaControls;
+          $('hideScrollbar').checked = hideScrollbar;
+          $('darkMode').checked = darkMode;
+          $('autoRefresh').value = '0';
+          $('showTaskbar').checked = showTaskbar;
+          break;
+      }
+    }
+
+    async function init() {
+      const state = await window.stealth.getState();
+      hotkeys = state.hotkeys || {};
+      defaults = state.defaults || {};
+      speed = state.speed || 1;
+      isMuted = !!state.muted;
+      novelFont = state.novelFont || 'Microsoft YaHei';
+      customSites = state.customSites || [];
+      toolbarCfg = state.toolbar || {};
+      pageZoom = Number(state.zoom) || 1;
+      welcomePath = state.welcomePath;
+      backgroundImage = state.backgroundImage || '';
+      hideScrollbar = state.hideScrollbar !== false;
+      darkMode = !!state.darkMode;
+      autoRefresh = Number(state.autoRefresh) || 0;
+      bossTransparent = state.bossTransparent !== false;
+      bossOpacity = Number(state.bossOpacity) || 0.25;
+      floatBall = !!state.floatBall;
+      mediaControls = !!state.mediaControls;
+      favorites = Array.isArray(state.favorites) ? state.favorites : [];
+      history = Array.isArray(state.history) ? state.history : [];
+      searchSources = state.searchSources || { novel: [] };
+      customSearchSources = state.customSearchSources || [];
+      // 合并用户自定义快速搜索源
+      if (state.customQuickSources && Array.isArray(state.customQuickSources) && state.customQuickSources.length > 0) {
+        quickSources = [...DEFAULT_QUICK_SOURCES, ...state.customQuickSources];
+      } else {
+        quickSources = [...DEFAULT_QUICK_SOURCES];
+      }
+      renderQuickSourceList();
+      // 加载在线小说书源
+      window.stealth.getBookSources().then(function(sources) {
+        bookSources = sources || [];
+        const sel = $('bookSource');
+        if (sel) {
+          sel.innerHTML = bookSources.map(function(s) {
+            return '<option value="' + s.index + '">' + s.title + '</option>';
+          }).join('');
+        }
+      });
+      document.title = state.customTitle || '小窗';
+
+      applyBackground();
+
+      // 设置 webview preload（最稳的链接拦截）
+      try { view.setAttribute('preload', 'file:///' + state.webviewPreload.replace(/\\/g, '/')); } catch (e) {}
+
+      $('opacity').value = String(Math.round((state.opacity == null ? 1 : state.opacity) * 100));
+      window.stealth.setOpacity(Number($('opacity').value) / 100);
+      $('pin').classList.toggle('on', !!state.alwaysOnTop);
+      $('showTaskbar').checked = !!state.showTaskbar;
+      $('muteBtn').innerHTML = isMuted ?
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>' :
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+      $('muteBtn').classList.toggle('muted', isMuted);
+      const sp = String(speed);
+      if ([...$('speed').options].some(function(o){ return o.value === sp; })) $('speed').value = sp;
+      refreshQuickSite();
+      applyToolbar();
+
+      setMode('web');
+      goHome();
+
+      window.addEventListener('resize', relayoutWeb);
+      new ResizeObserver(relayoutWeb).observe($('viewHost'));
+
+      // 主进程弹窗拦截（双重保险）
+      window.stealth.onWebviewOpenUrl(function(url) {
+        if (url && mode === 'web') {
+          view.src = url;
+          $('url').value = url;
+          window.stealth.saveUrl(url);
+        }
+      });
+
+      // webview preload 发来的消息（链接 + 按键）
+      view.addEventListener('ipc-message', function(e) {
+        try {
+          if (e.channel === 'pip-open-url' && e.args && e.args[0]) {
+            var url = e.args[0];
+            if (url && mode === 'web') {
+              view.src = url;
+              $('url').value = url;
+              window.stealth.saveUrl(url);
+            }
+          }
+          if (e.channel === 'pip-keydown' && e.args && e.args[0]) {
+            handleAppHotkey(e.args[0]);
+          }
+          if (e.channel === 'pip-alt-wheel' && e.args && e.args[0]) {
+            let v = Number($('opacity').value) || 100;
+            v += e.args[0].deltaY > 0 ? -5 : 5;
+            v = Math.max(20, Math.min(100, v));
+            $('opacity').value = String(v);
+            window.stealth.setOpacity(v / 100);
+          }
+          if (e.channel === 'pip-ctrl-wheel' && e.args && e.args[0]) {
+            // Ctrl+滚轮缩放网页
+            try {
+              let z = view.getZoomFactor ? view.getZoomFactor() : 1;
+              z += e.args[0].deltaY > 0 ? -0.1 : 0.1;
+              z = Math.max(0.5, Math.min(3, z));
+              if (view.setZoomFactor) view.setZoomFactor(z);
+              pageZoom = z;
+              window.stealth.setZoom(z);
+            } catch (err) {}
+          }
+        } catch (err) {}
+      });
+
+      view.addEventListener('did-navigate', function(e) {
+        if (mode === 'web' && e.url && e.url.indexOf('welcome.html') < 0) {
+          $('url').value = e.url; window.stealth.saveUrl(e.url);
+        }
+        adCss(); applySpeed(); restoreZoom(); applyExtras(); relayoutWeb();
+      });
+      view.addEventListener('did-navigate-in-page', function(e) {
+        if (mode === 'web' && e.url && e.url.indexOf('welcome.html') < 0) {
+          $('url').value = e.url; window.stealth.saveUrl(e.url);
+        }
+      });
+      view.addEventListener('did-finish-load', function() {
+        adCss(); applySpeed(); restoreZoom(); applyExtras(); relayoutWeb();
+        // 自动添加历史记录
+        try {
+          const url = view.getURL();
+          if (url && !url.startsWith('file:') && url.indexOf('welcome.html') < 0) {
+            addToHistory(url, view.getTitle() || url);
+          }
+        } catch (e) {}
+        // 欢迎页快捷键动态更新（从配置读取，不硬编码）
+        try {
+          const url = view.getURL();
+          if (url && url.indexOf('welcome.html') >= 0) {
+            const hideKey = hotkeys.hide || 'Alt+H';
+            const chromeKey = hotkeys.chrome || 'F12';
+            const js = `(function(){
+              var kbds = document.querySelectorAll('kbd');
+              if (kbds.length >= 4) {
+                kbds[3].textContent = ${JSON.stringify(chromeKey)};
+              }
+            })();`;
+            view.executeJavaScript(js, false).catch(function(){});
+          }
+        } catch (e) {}
+      });
+      view.addEventListener('dom-ready', function() {
+        adCss(); applySpeed(); restoreZoom(); applyExtras(); relayoutWeb();
+        try { view.focus(); } catch(e){}
+      });
+      // webview 崩溃后自动恢复
+      view.addEventListener('crashed', function() {
+        console.error('webview crashed, reloading...');
+        try { view.reload(); } catch(e) {}
+      });
+      view.addEventListener('render-process-gone', function(e) {
+        console.error('webview render-process-gone:', e.reason);
+        try { view.reload(); } catch(err) {}
+      });
+      // webview 加载失败时显示提示
+      view.addEventListener('did-fail-load', function(e) {
+        if (e.errorCode === -3 || e.errorCode === 0) return; // 忽略取消/正常
+        console.warn('webview did-fail-load:', e.errorCode, e.errorDescription);
+      });
+      view.addEventListener('did-start-loading', function() {
+        $('go').textContent = '×';
+      });
+      view.addEventListener('did-stop-loading', function() {
+        $('go').textContent = 'Go';
+      });
+
+      // 地址栏 Go：空内容回欢迎页
+      $('go').onclick = function() {
+        const raw = $('url').value.trim();
+        if (!raw) { goHome(); return; }
+        const u = normalizeUrl(raw);
+        setMode('web'); view.src = u; window.stealth.saveUrl(u); setTimeout(relayoutWeb, 50);
+      };
+      $('url').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); $('go').click(); } });
+      $('back').onclick = function() { if (mode === 'web' && view.canGoBack()) view.goBack(); };
+      $('fwd').onclick = function() { if (mode === 'web' && view.canGoForward()) view.goForward(); };
+      $('reload').onclick = function() { if (mode === 'web') view.reload(); };
+      $('file').onclick = async function() {
+        const r = await window.stealth.openMedia();
+        if (!r) return;
+        if (r.error) { alert(r.error); return; }
+        if (r.kind === 'book') openBook(r.data);
+        else if (r.kind === 'video') openLocalVideo(r.path);
+      };
+
+      $('quickSite').onchange = function() {
+        const v = $('quickSite').value;
+        if (v) {
+          setMode('web'); view.src = v; window.stealth.saveUrl(v);
+          $('url').value = v;
+        }
+        $('quickSite').selectedIndex = 0;
+      };
+
+      // 静音按钮点击：切换静音 + 展开/收起音量滑条
+      $('muteBtn').onclick = function(e) {
+        e.stopPropagation();
+        toggleMute();
+      };
+      $('mediaPlayBtn').onclick = function(e) {
+        e.stopPropagation();
+        if (window.stealth.mediaPlayPause) window.stealth.mediaPlayPause();
+      };
+
+      // 透明度按钮点击：展开/收起滑条
+      $('opacityBtn').onclick = function(e) {
+        e.stopPropagation();
+        $('opacityGroup').classList.toggle('open');
+      };
+      $('opacity').oninput = function() { window.stealth.setOpacity(Number($('opacity').value) / 100); };
+
+      // 点击其他地方收起滑条
+      document.addEventListener('click', function(e) {
+        if (!$('muteGroup').contains(e.target)) $('muteGroup').classList.remove('open');
+        if (!$('opacityGroup').contains(e.target)) $('opacityGroup').classList.remove('open');
+      });
+
+      $('speed').onchange = function() { speed = Number($('speed').value) || 1; window.stealth.setSpeed(speed); applySpeed(); };
+      $('fontUp').onclick = function() { fontSize = Math.min(40, fontSize + 1); $('novel').style.fontSize = fontSize + 'px'; saveProg(); };
+      $('fontDown').onclick = function() { fontSize = Math.max(12, fontSize - 1); $('novel').style.fontSize = fontSize + 'px'; saveProg(); };
+      $('tocBtn').onclick = toggleToc;
+      $('pin').onclick = function() {
+        const n = !$('pin').classList.contains('on');
+        $('pin').classList.toggle('on', n);
+        window.stealth.setAlwaysOnTop(n);
+      };
+      $('splitBtn').onclick = function() { toggleSplit(); };
+      $('hide').onclick = function() { window.stealth.toggleHidden(); };
+      $('close').onclick = function() { window.stealth.close(); };
+      $('helpBtn').onclick = function() { showHelp(true); };
+      $('helpClose').onclick = function() { showHelp(false); };
+      $('helpModal').onclick = function(e) { if (e.target === $('helpModal')) showHelp(false); };
+      $('setBtn').onclick = function() { showSet(true); };
+      $('setClose').onclick = function() { showSet(false); };
+      setupHotkeyRecorder();
+
+      // 收藏夹
+      $('favBtn').onclick = function(e) {
+        e.stopPropagation();
+        const show = !$('favDropdown').classList.contains('show');
+        $('histDropdown').classList.remove('show');
+        $('favDropdown').classList.toggle('show', show);
+        if (show) renderFavorites();
+      };
+      $('addFavBtn').onclick = function(e) {
+        e.stopPropagation();
+        addCurrentToFavorites();
+      };
+      // 历史记录
+      $('histBtn').onclick = function(e) {
+        e.stopPropagation();
+        const show = !$('histDropdown').classList.contains('show');
+        $('favDropdown').classList.remove('show');
+        $('histDropdown').classList.toggle('show', show);
+        if (show) renderHistory();
+      };
+      $('clearHistBtn').onclick = async function(e) {
+        e.stopPropagation();
+        history = await window.stealth.clearHistory();
+        renderHistory();
+      };
+      // 点击其他地方关闭下拉
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('#favDropdown') && !e.target.closest('#favBtn')) {
+          $('favDropdown').classList.remove('show');
+        }
+        if (!e.target.closest('#histDropdown') && !e.target.closest('#histBtn')) {
+          $('histDropdown').classList.remove('show');
+        }
+        if (!e.target.closest('#searchPanel') && !e.target.closest('#searchBtn')) {
+          $('searchPanel').classList.remove('show');
+        }
+      });
+
+      // 在线小说搜索
+      $('searchBtn').onclick = function(e) {
+        e.stopPropagation();
+        const show = !$('searchPanel').classList.contains('show');
+        $('favDropdown').classList.remove('show');
+        $('histDropdown').classList.remove('show');
+        $('searchPanel').classList.toggle('show', show);
+      };
+      $('searchBack').onclick = function() {
+        if ($('chapterList').style.display !== 'none') {
+          $('chapterList').style.display = 'none';
+          $('searchResults').style.display = 'block';
+          $('searchBack').style.display = 'none';
+        } else if ($('searchResults').style.display !== 'none') {
+          $('searchResults').style.display = 'none';
+          $('bookSourceSearchArea').style.display = 'block';
+          $('searchBack').style.display = 'none';
+        }
+      };
+      // 搜索模式切换
+      $('searchModeQuick').onclick = function() {
+        searchMode = 'quick';
+        $('searchModeQuick').classList.add('primary');
+        $('searchModeBookSource').classList.remove('primary');
+        $('quickSearchArea').style.display = 'block';
+        $('bookSourceSearchArea').style.display = 'none';
+        $('searchResults').style.display = 'none';
+        $('chapterList').style.display = 'none';
+        $('searchBack').style.display = 'none';
+      };
+      $('searchModeBookSource').onclick = function() {
+        searchMode = 'bookSource';
+        $('searchModeBookSource').classList.add('primary');
+        $('searchModeQuick').classList.remove('primary');
+        $('quickSearchArea').style.display = 'none';
+        $('bookSourceSearchArea').style.display = 'block';
+        $('searchResults').style.display = 'none';
+        $('chapterList').style.display = 'none';
+        $('searchBack').style.display = 'none';
+      };
+      // 渲染快速搜索源（搜索面板下拉）
+      function renderQuickSearchSources() {
+        const sel = $('quickSearchSource');
+        if (!sel) return;
+        sel.innerHTML = quickSources.map(function(s, i) {
+          return '<option value="' + i + '">' + s.name + '</option>';
+        }).join('');
+      }
+      renderQuickSearchSources();
+      // 渲染设置面板的快速搜索源列表
+      function renderQuickSourceList() {
+        const list = $('quickSourceList');
+        if (!list) return;
+        list.innerHTML = quickSources.map(function(s, i) {
+          return '<div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,0.05);">' +
+            '<span style="flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + s.url + '">' +
+            s.name + ' <span style="color:#999;">' + s.url.substring(0, 30) + '...</span>' +
+            '</span>' +
+            '<button data-idx="' + i + '" class="delQuickSource" style="padding:2px 6px;font-size:10px;color:#e53e3e;border:1px solid rgba(229,62,62,0.3);background:transparent;border-radius:4px;cursor:pointer;">删</button>' +
+            '</div>';
+        }).join('');
+        // 绑定删除按钮
+        document.querySelectorAll('.delQuickSource').forEach(function(btn) {
+          btn.onclick = function() {
+            const idx = Number(this.getAttribute('data-idx'));
+            quickSources.splice(idx, 1);
+            saveQuickSources();
+            renderQuickSourceList();
+            renderQuickSearchSources();
+          };
+        });
+      }
+      // 保存快速搜索源到配置
+      function saveQuickSources() {
+        const custom = quickSources.slice(DEFAULT_QUICK_SOURCES.length);
+        window.stealth.saveExtras({ customQuickSources: custom });
+      }
+      // 添加快速搜索源
+      $('addQuickSource').onclick = function() {
+        const name = $('newSourceName').value.trim();
+        const url = $('newSourceUrl').value.trim();
+        if (!name || !url) { alert('请填写名称和URL'); return; }
+        if (url.indexOf('{k}') < 0) { alert('URL 必须包含 {k} 占位符'); return; }
+        quickSources.push({ name: name, url: url });
+        saveQuickSources();
+        renderQuickSourceList();
+        renderQuickSearchSources();
+        $('newSourceName').value = '';
+        $('newSourceUrl').value = '';
+      };
+      // 恢复默认源
+      $('resetQuickSources').onclick = function() {
+        if (!confirm('确定恢复默认搜索源？自定义源会被删除')) return;
+        quickSources = [...DEFAULT_QUICK_SOURCES];
+        saveQuickSources();
+        renderQuickSourceList();
+        renderQuickSearchSources();
+      };
+      // 快速搜索
+      $('quickSearchBtn').onclick = function() {
+        const kw = $('quickSearchKeyword').value.trim();
+        if (!kw) return;
+        const idx = Number($('quickSearchSource').value);
+        const source = quickSources[idx];
+        if (!source) return;
+        const url = source.url.replace('{k}', encodeURIComponent(kw));
+        $('searchPanel').classList.remove('show');
+        setMode('web');
+        view.src = url;
+        $('url').value = url;
+        window.stealth.saveUrl(url);
+      };
+      $('quickSearchKeyword').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); $('quickSearchBtn').click(); }
+      });
+      $('doSearch').onclick = async function() {
+        const kw = $('searchKeyword').value.trim();
+        if (!kw) return;
+        $('doSearch').textContent = '搜索中...';
+        $('doSearch').disabled = true;
+        try {
+          const result = await window.stealth.novelSearch(kw);
+          if (result.ok && result.results && result.results.length > 0) {
+            renderUnifiedSearchResults(result.results);
+          } else {
+            $('searchResults').innerHTML = '<div style="padding:10px;text-align:center;color:#999;font-size:12px;">' + (result.error ? '搜索失败: ' + result.error : '未找到结果') + '</div>';
+            $('searchResults').style.display = 'block';
+          }
+        } catch (e) {
+          $('searchResults').innerHTML = '<div style="padding:10px;text-align:center;color:#999;font-size:12px;">搜索出错: ' + e.message + '</div>';
+          $('searchResults').style.display = 'block';
+        }
+        $('doSearch').textContent = '搜索';
+        $('doSearch').disabled = false;
+      };
+      $('searchKeyword').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); $('doSearch').click(); }
+      });
+
+      // 背景图片选择
+      $('selectBg').onclick = async function() {
+        const r = await window.stealth.selectBackground();
+        if (r && r.error) { alert(r.error); return; }
+        if (r && r.ok) {
+          const state = await window.stealth.getState();
+          backgroundImage = state.backgroundImage || '';
+          applyBackground();
+        }
+      };
+      $('clearBg').onclick = async function() {
+        await window.stealth.clearBackground();
+        backgroundImage = '';
+        applyBackground();
+      };
+
+      $('showTaskbar').onchange = function() {
+        window.stealth.setShowTaskbar($('showTaskbar').checked);
+      };
+      $('bossOpacity').addEventListener('input', function() {
+        $('bossOpacityVal').textContent = $('bossOpacity').value + '%';
+      });
+
+      // 搜索源管理
+      $('importSearchSrc').onclick = async function() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = function(e) {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = function(ev) {
+            const result = window.stealth.importSearchSources(ev.target.result);
+            result.then(function(r) {
+              if (r.ok) {
+                customSearchSources = r.all;
+                $('customSearchSources').value = JSON.stringify(customSearchSources, null, 2);
+                alert('导入成功，新增 ' + r.count + ' 个搜索源');
+              } else {
+                alert('导入失败: ' + r.error);
+              }
+            });
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+      };
+      $('exportSearchSrc').onclick = async function() {
+        const json = await window.stealth.exportSearchSources();
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'search-sources.json';
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+      $('resetSearchSrc').onclick = function() {
+        if (confirm('确定清空所有自定义搜索源？')) {
+          customSearchSources = [];
+          $('customSearchSources').value = '[]';
+        }
+      };
+      $('ignoreMouse').onchange = function() {
+        const on = $('ignoreMouse').checked;
+        window.stealth.setIgnoreMouse(on);
+        if (on) alert('鼠标穿透已开启，窗口不再响应鼠标。按隐身热键（默认 Alt+H 或 `）可恢复。');
+      };
+
+      $('hkReset').onclick = function() {
+        $('hkHide').value = defaults.hide || 'Alt+H';
+        $('hkChrome').value = defaults.chrome || 'F12';
+        $('hkPin').value = defaults.pin || 'Control+T';
+        $('hkToc').value = defaults.toc || 'F8';
+        $('hkHelp').value = defaults.help || 'F1';
+      };
+      $('hkSave').onclick = async function() {
+        hotkeys = await window.stealth.saveHotkeys({
+          hide: $('hkHide').value.trim(),
+          chrome: $('hkChrome').value.trim(),
+          pin: $('hkPin').value.trim(),
+          toc: $('hkToc').value.trim(),
+          help: $('hkHelp').value.trim()
+        });
+        const sites = textToSites($('customSites').value);
+        const result = await window.stealth.saveCustom({
+          customTitle: $('customTitle').value.trim(),
+          customSites: sites,
+          novelFont: $('novelFont').value
+        });
+        customSites = result.customSites;
+        novelFont = result.novelFont;
+        document.title = result.customTitle;
+        refreshQuickSite();
+        if (mode === 'book') $('novel').style.fontFamily = novelFont;
+        toolbarCfg = await window.stealth.saveToolbar({
+          quickSite: $('tb_quickSite').checked,
+          speed: $('tb_speed').checked,
+          mute: $('tb_mute').checked,
+          opacity: $('tb_opacity').checked,
+          help: $('tb_help').checked
+        });
+        applyToolbar();
+        // 保存额外设置
+        const extras = await window.stealth.saveExtras({
+          hideScrollbar: $('hideScrollbar').checked,
+          darkMode: $('darkMode').checked,
+          autoRefresh: Number($('autoRefresh').value),
+          bossTransparent: $('bossTransparent').checked,
+          bossOpacity: Number($('bossOpacity').value) / 100,
+          floatBall: $('floatBall').checked,
+          mediaControls: $('mediaControls').checked
+        });
+        hideScrollbar = extras.hideScrollbar;
+        darkMode = extras.darkMode;
+        autoRefresh = extras.autoRefresh;
+        bossTransparent = extras.bossTransparent;
+        bossOpacity = extras.bossOpacity;
+        floatBall = extras.floatBall;
+        mediaControls = extras.mediaControls;
+        applyExtras();
+        restartAutoRefresh();
+        // 应用浮动球和媒体控制栏
+        if (window.stealth.setFloatBall) window.stealth.setFloatBall(floatBall);
+        applyMediaControls();
+        // 保存自定义搜索源
+        try {
+          const srcText = $('customSearchSources').value.trim();
+          if (srcText) {
+            const srcArr = JSON.parse(srcText);
+            customSearchSources = await window.stealth.saveSearchSources(srcArr);
+          } else {
+            customSearchSources = await window.stealth.saveSearchSources([]);
+          }
+        } catch (e) {
+          alert('搜索源格式错误: ' + e.message);
+          return;
+        }
+        showSet(false);
+      };
+
+      $('novel').addEventListener('scroll', saveProg);
+      $('novel').addEventListener('click', function(e) {
+        if (window.getSelection && String(window.getSelection())) return;
+        const rect = $('novel').getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const step = Math.max(120, rect.height - 40);
+        if (x < rect.width / 3) $('novel').scrollBy({ top: -step, behavior: 'smooth' });
+        else if (x > rect.width * 2 / 3) $('novel').scrollBy({ top: step, behavior: 'smooth' });
+      });
+
+      window.stealth.onGlobalHotkey(function(name) {
+        if (name === 'chrome') toggleChrome();
+        if (name === 'pin') $('pin').click();
+        if (name === 'toc') toggleToc();
+        if (name === 'help') showHelp(true);
+      });
+      // 老板键：窗口隐藏时暂停所有视频 + 静音
+      window.stealth.onHiddenChanged(function(hidden) {
+        if (hidden) pauseAllMedia();
+      });
+
+      document.addEventListener('keydown', function(e) {
+        // 先处理应用内热键（去顶栏/置顶/目录/说明书）
+        if (handleAppHotkey(e)) return;
+        // 缩放快捷键
+        if (e.ctrlKey && (e.key === '=' || e.key === '+' || e.key === '0' || e.key === '-')) {
+          e.preventDefault();
+          if (mode === 'web') {
+            if (e.key === '0') pageZoom = 1;
+            else pageZoom += (e.key === '-' ? -0.1 : 0.1);
+            pageZoom = Math.max(0.5, Math.min(3, Math.round(pageZoom * 10) / 10));
+            try { view.setZoomFactor(pageZoom); } catch (err) {}
+            window.stealth.setZoom(pageZoom);
+          }
+          return;
+        }
+        // 透明度快捷键
+        if (e.altKey && (e.key === '=' || e.key === '+' || e.key === '-')) {
+          e.preventDefault();
+          let v = Number($('opacity').value) || 100;
+          v += (e.key === '-' ? -5 : 5);
+          v = Math.max(20, Math.min(100, v));
+          $('opacity').value = String(v);
+          window.stealth.setOpacity(v / 100);
+          return;
+        }
+        // Ctrl+M 静音
+        if (e.ctrlKey && (e.key === 'm' || e.key === 'M')) { e.preventDefault(); toggleMute(); return; }
+        if (e.ctrlKey && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); $('file').click(); return; }
+        if (e.ctrlKey && (e.key === 't' || e.key === 'T')) { e.preventDefault(); $('pin').click(); return; }
+        if (mode !== 'book') return;
+        if (e.ctrlKey && (e.key === '=' || e.key === '+')) { e.preventDefault(); $('fontUp').click(); }
+        if (e.ctrlKey && e.key === '-') { e.preventDefault(); $('fontDown').click(); }
+        if (e.ctrlKey && e.key === 'ArrowRight') { e.preventDefault(); showChap(chap + 1, 0); }
+        if (e.ctrlKey && e.key === 'ArrowLeft') { e.preventDefault(); showChap(chap - 1, 0); }
+        const step = Math.max(120, $('novel').clientHeight - 40);
+        if (!e.ctrlKey && (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ')) {
+          e.preventDefault(); $('novel').scrollBy({ top: step, behavior: 'smooth' });
+        }
+        if (!e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'PageUp')) {
+          e.preventDefault(); $('novel').scrollBy({ top: -step, behavior: 'smooth' });
+        }
+      });
+
+      // Ctrl+滚轮：webview 缩放
+      document.addEventListener('wheel', function(e) {
+        if (e.ctrlKey) {
+          e.preventDefault(); e.stopPropagation();
+          if (mode === 'web') {
+            pageZoom += e.deltaY > 0 ? -0.1 : 0.1;
+            pageZoom = Math.max(0.5, Math.min(3, Math.round(pageZoom * 10) / 10));
+            try { view.setZoomFactor(pageZoom); } catch (err) {}
+            window.stealth.setZoom(pageZoom);
+          } else if (mode === 'book') {
+            fontSize = Math.max(12, Math.min(40, fontSize + (e.deltaY > 0 ? -1 : 1)));
+            $('novel').style.fontSize = fontSize + 'px';
+            saveProg();
+          }
+          return;
+        }
+        if (e.altKey) {
+          e.preventDefault();
+          let v = Number($('opacity').value) || 100;
+          v += e.deltaY > 0 ? -5 : 5;
+          v = Math.max(20, Math.min(100, v));
+          $('opacity').value = String(v);
+          window.stealth.setOpacity(v / 100);
+        }
+      }, { passive: false });
+
+      $('dragStrip').addEventListener('dblclick', toggleChrome);
+      // 隐藏顶栏模式下，鼠标移到顶部滑出顶栏
+      $('dragStrip').addEventListener('mouseenter', function() {
+        if (chromeOff) {
+          if (chromeHoverTimer) { clearTimeout(chromeHoverTimer); chromeHoverTimer = null; }
+          document.getElementById('app').classList.remove('chrome-off');
+        }
+      });
+      $('bar').addEventListener('mouseenter', function() {
+        if (chromeHoverTimer) { clearTimeout(chromeHoverTimer); chromeHoverTimer = null; }
+      });
+      $('bar').addEventListener('mouseleave', function() {
+        if (chromeOff) {
+          chromeHoverTimer = setTimeout(function() {
+            document.getElementById('app').classList.add('chrome-off');
+          }, 800);
+        }
+      });
+      document.addEventListener('dragover', function(e) { e.preventDefault(); });
+      document.addEventListener('drop', async function(e) {
+        e.preventDefault();
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (!f) return;
+        const p = window.stealth.filePath(f);
+        if (!p) return;
+        if (/\.txt$/i.test(p)) openBook(await window.stealth.dropTxt(p));
+        else if (/\.(mp4|webm|mkv|avi|mov)$/i.test(p)) openLocalVideo(p);
+      });
+
+      initSplitDrag();
+
+      try {
+        if (!localStorage.getItem('pip_help_seen')) {
+          localStorage.setItem('pip_help_seen', '1');
+          showHelp(true);
+        }
+      } catch (e) {}
+    }
+    init();
+  </script>
+</body>
+</html>
