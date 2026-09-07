@@ -447,20 +447,24 @@ const DEFAULT_CONFIG = {
   autoRefresh: 0,
   bossTransparent: false,
   bossOpacity: 0.25,
+  pauseOnBlur: true,
   favorites: [],
   history: [],
   customSearchSources: [],
   customQuickSources: [], // 用户自定义快速搜索源
-  floatBall: false, // 桌面浮动球开关
-  floatBallPos: { x: 100, y: 100 },
   mediaControls: false, // 媒体控制栏开关
   bounds: { width: 560, height: 380 },
-  hotkeys: { ...DEFAULT_HOTKEYS }
+  hotkeys: { ...DEFAULT_HOTKEYS },
+  // ===== v2 新增：会话/布局状态 =====
+  version: 2,
+  lastMode: 'web',          // 上次窗口模式：web / book / video
+  lastVideoPath: '',        // 上次本地视频路径
+  splitState: { active: false, ratio: 0.5, reversed: false }, // 分屏状态
+  lineHeight: 1.9           // 小说默认行距
 };
 
 let mainWindow = null;
 let tray = null;
-let floatWindow = null; // 桌面浮动球
 let hidden = false;
 let config = { ...DEFAULT_CONFIG };
 let currentSpeed = 1;
@@ -469,7 +473,6 @@ let currentSpeed = 1;
 function applySpeedToAll() {
   const { webContents } = require('electron');
   const rate = currentSpeed;
-  if (rate === 1) return; // 1x 不需要设置
   // 递归遍历 Shadow DOM + iframe，找到所有 video/audio 元素
   const js = `(function(r){
     window.__pipSpeed = r;
@@ -592,6 +595,27 @@ function loadConfig() {
         hotkeys: { ...DEFAULT_HOTKEYS, ...(raw.hotkeys || {}) },
         customSites: mergeSites(DEFAULT_SITES, Array.isArray(raw.customSites) ? raw.customSites : [])
       };
+      // ===== 配置校验（防止损坏/非法值导致启动异常）=====
+      if (!config.bounds || typeof config.bounds.width !== 'number' || typeof config.bounds.height !== 'number') {
+        config.bounds = { ...DEFAULT_CONFIG.bounds };
+      }
+      if (typeof config.bounds.x !== 'number') config.bounds.x = undefined;
+      if (typeof config.bounds.y !== 'number') config.bounds.y = undefined;
+      if (!config.splitState || typeof config.splitState !== 'object') {
+        config.splitState = { ...DEFAULT_CONFIG.splitState };
+      }
+      config.splitState = {
+        active: !!config.splitState.active,
+        ratio: Math.max(0.15, Math.min(0.85, Number(config.splitState.ratio) || 0.5)),
+        reversed: !!config.splitState.reversed
+      };
+      const lh = Number(config.lineHeight);
+      if (Number.isNaN(lh) || lh < 1.2 || lh > 3) config.lineHeight = DEFAULT_CONFIG.lineHeight;
+      if (typeof config.lastMode !== 'string' || !['web', 'book', 'video'].includes(config.lastMode)) {
+        config.lastMode = 'web';
+      }
+      if (typeof config.lastVideoPath !== 'string') config.lastVideoPath = '';
+      config.version = 2; // 标记为已校验的最新版本
     }
   } catch (e) {
     console.error('[loadConfig] 配置文件损坏，使用默认配置:', e.message);
@@ -606,7 +630,8 @@ function loadConfig() {
   currentSpeed = Number(config.speed) || 1;
 }
 
-function saveConfig() {
+// 立即写盘（退出/关闭等关键时机用）
+function writeConfigNow() {
   try {
     fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -618,10 +643,23 @@ function saveConfig() {
   } catch (_) {}
 }
 
+// 防抖保存：高频操作（透明度/倍速/滚动等）不频繁写磁盘
+let saveTimer = null;
+function saveConfig() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(function() { saveTimer = null; writeConfigNow(); }, 400);
+}
+// 立即刷新所有待写状态（退出前调用）
+function flushConfig() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  writeConfigNow();
+}
+
 function clampOpacity(v) {
   const n = Number(v);
   if (Number.isNaN(n)) return 1;
-  return Math.min(1, Math.max(0.2, n));
+  // 下限 0.05：允许很透明，但不至于完全消失找不到
+  return Math.min(1, Math.max(0.05, n));
 }
 
 let adBlocker = null;
@@ -650,15 +688,16 @@ function setHidden(next) {
   hidden = next;
   const { webContents } = require('electron');
   if (hidden) {
-    // 老板键增强：遍历所有 webContents（主窗口+webview+所有iframe），全部静音+暂停
-    webContents.getAllWebContents().forEach(function(wc) {
-      try { wc.setAudioMuted(true); } catch (_) {}
-      try {
-        wc.executeJavaScript(
-          `document.querySelectorAll('video,audio').forEach(function(v){try{v.pause()}catch(e){}})`, false
-        ).catch(function(){});
-      } catch (_) {}
-    });
+    if (config.pauseOnBlur !== false) {
+      webContents.getAllWebContents().forEach(function(wc) {
+        try { wc.setAudioMuted(true); } catch (_) {}
+        try {
+          wc.executeJavaScript(
+            `document.querySelectorAll('video,audio').forEach(function(v){try{v.pause()}catch(e){}})`, false
+          ).catch(function(){});
+        } catch (_) {}
+      });
+    }
     mainWindow.hide();
   } else {
     mainWindow.show();
@@ -727,7 +766,7 @@ function createWindow() {
     backgroundColor: '#ffffff',
     show: false,
     title: config.customTitle || '小窗',
-    icon: path.join(__dirname, 'build', 'icon.jpg'),
+    icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -760,19 +799,24 @@ function createWindow() {
     mainWindow.setSkipTaskbar(!config.showTaskbar);
   });
   mainWindow.on('show', () => mainWindow.setSkipTaskbar(!config.showTaskbar));
-  // 防老板透明渐变：窗口失去焦点时自动变透明，获得焦点时恢复
+  // 窗口失焦：通知渲染进程暂停视频/静音；防老板透明渐变（默认关闭）
   mainWindow.on('blur', () => {
+    try { mainWindow.webContents.send('window-blur'); } catch (e) {}
     if (config.bossTransparent && !hidden) {
       mainWindow.setOpacity(Math.min(clampOpacity(config.opacity), Number(config.bossOpacity) || 0.25));
     }
   });
   mainWindow.on('focus', () => {
+    try { mainWindow.webContents.send('window-focus'); } catch (e) {}
     if (config.bossTransparent && !hidden) {
       mainWindow.setOpacity(clampOpacity(config.opacity));
     }
   });
-  mainWindow.on('close', (e) => { e.preventDefault(); setHidden(true); saveConfig(); });
+  mainWindow.on('close', (e) => { e.preventDefault(); setHidden(true); flushConfig(); });
   mainWindow.on('closed', () => { mainWindow = null; });
+  // 窗口移动/缩放：防抖记录位置，进程被杀也能恢复上次位置
+  mainWindow.on('move', saveConfig);
+  mainWindow.on('resize', saveConfig);
   mainWindow.on('unresponsive', () => {
     console.error('[main] 窗口无响应');
     // 不强制重启，只记录日志，避免丢失用户状态
@@ -789,18 +833,8 @@ function createWindow() {
   });
 }
 
-// 创建桌面浮动球
-function createFloatWindow() {
-  // 浮动球功能已移除
-}
-
-// 销毁浮动球
-function destroyFloatWindow() {
-  // 浮动球功能已移除
-}
-
 function createTray() {
-  const iconPath = path.join(__dirname, 'build', 'icon.jpg');
+  const iconPath = path.join(__dirname, 'build', 'icon.png');
   const img = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createFromDataURL(
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAAD/eMzBAAAAGUlEQVQ4T2P8z8DAwMDAwMDAwMDAwMDAAAAn+AFq4s3vAAAAAElFTkSuQmCC'
   );
@@ -820,7 +854,7 @@ function createTray() {
       { type: 'separator' },
       {
         label: '退出', click: () => {
-          saveConfig();
+          flushConfig();
           if (mainWindow) { mainWindow.removeAllListeners('close'); mainWindow.destroy(); }
           app.exit(0);
         }
@@ -864,6 +898,25 @@ function saveProgressMap(map) {
   } catch (_) {}
 }
 
+// ===== 进度读写缓存：滚动等高频保存只改内存，防抖写盘 =====
+let progressCache = null;
+let progressWriteTimer = null;
+function getProgressMap() {
+  if (!progressCache) progressCache = loadProgressMap();
+  return progressCache;
+}
+function scheduleProgressWrite() {
+  if (progressWriteTimer) clearTimeout(progressWriteTimer);
+  progressWriteTimer = setTimeout(function() {
+    progressWriteTimer = null;
+    saveProgressMap(getProgressMap());
+  }, 500);
+}
+function flushProgress() {
+  if (progressWriteTimer) { clearTimeout(progressWriteTimer); progressWriteTimer = null; }
+  saveProgressMap(getProgressMap());
+}
+
 function wireIpc() {
   ipcMain.handle('get-state', () => ({
     opacity: clampOpacity(config.opacity),
@@ -882,8 +935,9 @@ function wireIpc() {
     hideScrollbar: config.hideScrollbar !== false,
     darkMode: !!config.darkMode,
     autoRefresh: Number(config.autoRefresh) || 0,
-    bossTransparent: config.bossTransparent !== false,
+    bossTransparent: config.bossTransparent === true,
     bossOpacity: Number(config.bossOpacity) || 0.25,
+    pauseOnBlur: !!config.pauseOnBlur,
     favorites: Array.isArray(config.favorites) ? config.favorites : [],
     history: Array.isArray(config.history) ? config.history.slice(0, 100) : [],
     searchSources: {
@@ -896,7 +950,12 @@ function wireIpc() {
     defaults: { ...DEFAULT_HOTKEYS },
     welcomePath: path.join(__dirname, 'welcome.html'),
     webviewPreload: path.join(__dirname, 'webview-preload.js'),
-    sampleTxt: path.join(__dirname, 'examples', '测试小说.txt')
+    sampleTxt: path.join(__dirname, 'examples', '测试小说.txt'),
+    lastMode: config.lastMode || 'web',
+    lastVideoPath: config.lastVideoPath || '',
+    splitState: config.splitState || { active: false, ratio: 0.5, reversed: false },
+    lineHeight: Number(config.lineHeight) || 1.9,
+    version: config.version || 2
   }));
 
   ipcMain.handle('save-hotkeys', (_e, hk) => {
@@ -1032,15 +1091,6 @@ function wireIpc() {
     }
   });
 
-  // 桌面浮动球开关
-  ipcMain.handle('set-float-ball', (_e, enabled) => {
-    config.floatBall = !!enabled;
-    saveConfig();
-    if (enabled) createFloatWindow();
-    else destroyFloatWindow();
-    return config.floatBall;
-  });
-
   // 媒体控制：播放/暂停
   ipcMain.handle('media-play-pause', async () => {
     const { webContents } = require('electron');
@@ -1095,7 +1145,7 @@ function wireIpc() {
     config.speed = currentSpeed;
     saveConfig();
     applySpeedToAll();
-    // 频繁重试：iframe 可能还没加载完，每500ms重试，共10次
+    // 频繁重试：iframe / 站内播放器 可能还没加载完，每500ms重试，共10次
     let tries = 0;
     const retry = setInterval(() => {
       tries++;
@@ -1203,8 +1253,8 @@ function wireIpc() {
     if (extras.autoRefresh !== undefined) config.autoRefresh = Number(extras.autoRefresh) || 0;
     if (extras.bossTransparent !== undefined) config.bossTransparent = !!extras.bossTransparent;
     if (extras.bossOpacity !== undefined) config.bossOpacity = Math.min(1, Math.max(0.1, Number(extras.bossOpacity) || 0.25));
-    if (extras.floatBall !== undefined) config.floatBall = !!extras.floatBall;
     if (extras.mediaControls !== undefined) config.mediaControls = !!extras.mediaControls;
+    if (extras.pauseOnBlur !== undefined) config.pauseOnBlur = !!extras.pauseOnBlur;
     if (extras.customQuickSources !== undefined && Array.isArray(extras.customQuickSources)) config.customQuickSources = extras.customQuickSources;
     saveConfig();
     return {
@@ -1213,23 +1263,47 @@ function wireIpc() {
       autoRefresh: config.autoRefresh,
       bossTransparent: config.bossTransparent,
       bossOpacity: config.bossOpacity,
-      floatBall: config.floatBall,
-      mediaControls: config.mediaControls
+      mediaControls: config.mediaControls,
+      pauseOnBlur: !!config.pauseOnBlur
     };
   });
 
   ipcMain.on('window-close', () => setHidden(true));
+  ipcMain.on('window-minimize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
+  });
 
   ipcMain.handle('load-progress', (_e, key) => {
-    const map = loadProgressMap();
-    return map[String(key || '')] || null;
+    return getProgressMap()[String(key || '')] || null;
   });
 
   ipcMain.on('save-progress', (_e, key, data) => {
     if (!key) return;
-    const map = loadProgressMap();
-    map[String(key)] = data || {};
-    saveProgressMap(map);
+    getProgressMap()[String(key)] = data || {};
+    scheduleProgressWrite();
+  });
+
+  // 保存会话/布局状态（模式、本地视频、分屏、行距）
+  ipcMain.handle('save-ui-state', (_e, s) => {
+    if (s && typeof s === 'object') {
+      if (typeof s.lastMode === 'string' && ['web', 'book', 'video'].includes(s.lastMode)) {
+        config.lastMode = s.lastMode;
+      }
+      if (s.lastVideoPath !== undefined) {
+        config.lastVideoPath = String(s.lastVideoPath || '');
+      }
+      if (s.splitState && typeof s.splitState === 'object') {
+        config.splitState = {
+          active: !!s.splitState.active,
+          ratio: Math.max(0.15, Math.min(0.85, Number(s.splitState.ratio) || 0.5)),
+          reversed: !!s.splitState.reversed
+        };
+      }
+      const lh = Number(s.lineHeight);
+      if (!Number.isNaN(lh) && lh >= 1.2 && lh <= 3) config.lineHeight = lh;
+      saveConfig();
+    }
+    return { ok: true };
   });
 
   ipcMain.handle('open-txt', async () => {
@@ -1241,6 +1315,14 @@ function wireIpc() {
     if (res.canceled || !res.filePaths || !res.filePaths[0]) return null;
     try { return loadTxtNovel(res.filePaths[0]); }
     catch (e) { return { error: e.message || String(e) }; }
+  });
+
+  // 按路径打开 TXT（启动恢复 / 历史记录恢复用）
+  ipcMain.handle('open-txt-path', async (_e, filePath) => {
+    try {
+      if (!filePath || !fs.existsSync(filePath)) return { error: '文件不存在或已被移动' };
+      return loadTxtNovel(filePath);
+    } catch (e) { return { error: e.message || String(e) }; }
   });
 
   ipcMain.handle('open-media', async () => {
@@ -1342,24 +1424,37 @@ if (!gotLock) {
     });
 
     // webContents创建处理：给每个webview设置窗口打开处理器（禁止弹窗，在小窗内打开）
-    app.on('web-contents-created', (_e, contents) => {
-      if (contents.getType() !== 'webview') return;
-      contents.setWindowOpenHandler(({ url }) => {
-        if (mainWindow && !mainWindow.isDestroyed() && /^(https?:|about:)/.test(url)) {
-          mainWindow.webContents.send('webview-open-url', url);
+  app.on('web-contents-created', (_e, contents) => {
+    if (contents.getType() !== 'webview') return;
+    contents.on('did-start-navigation', (_ev, url) => {
+      if (url && /douyin|iesdouyin|aweme|huoshan|bilibili/i.test(String(url))) {
+        try { contents.setAudioMuted(!!config.muted); } catch (_) {}
+        if (currentSpeed !== 1) {
+          try { applySpeedToAll(); } catch (_) {}
         }
-        return { action: 'deny' };
+      }
+    });
+    contents.on('did-attach-webview', () => {
+      if (currentSpeed !== 1) {
+        try { applySpeedToAll(); } catch (_) {}
+      }
+    });
+    contents.setWindowOpenHandler(({ url }) => {
+      if (mainWindow && !mainWindow.isDestroyed() && /^(https?:|about:)/.test(url)) {
+        mainWindow.webContents.send('webview-open-url', url);
+      }
+      return { action: 'deny' };
       });
     });
 
     createWindow();
     createTray();
-    createFloatWindow();
     registerHotkeys();
   });
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
-    saveConfig();
+    flushConfig();
+    flushProgress();
   });
   app.on('window-all-closed', (e) => e.preventDefault());
 }

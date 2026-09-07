@@ -48,7 +48,7 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "build/icon.png",
+      "icon": "build/icon.ico",
       "artifactName": "PipReader.exe",
       "signAndEditExecutable": false
     },

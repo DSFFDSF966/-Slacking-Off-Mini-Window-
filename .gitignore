@@ -5,16 +5,14 @@ node_modules/
 dist/
 dist-out/
 out/
-build/
-发布/
 .eb-cache/
 *.exe
 *.msi
 *.dmg
 *.AppImage
 
-# 保留应用图标
-!build/icon.png
+# build 目录只保留图标资源
+build/*
 
 # 日志
 *.log
@@ -39,9 +37,26 @@ desktop.ini
 *.jpeg
 *.gif
 
-# 配置和数据（用户本地配置）
+# 配置和数据（用户本地配置 / 个人隐私，绝不上传）
 config.json
 *.local.json
+reading-progress.json
+*.corrupted.*
 
 # 缓存
 .cache/
+
+# 发布产物目录
+发布/
+dist-out/
+
+# 内部笔记 / 临时启动脚本（不发布）
+项目状态-下次优化参考.md
+启动.bat
+启动小窗.bat
+启动摸鱼小窗.bat
+
+# 应用图标（运行时/打包必需，白名单放最后确保生效）
+!build/icon.png
+!build/icon.ico
+!build/icon.jpg

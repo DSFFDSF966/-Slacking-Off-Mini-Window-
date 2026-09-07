@@ -18,11 +18,11 @@
       background-repeat: no-repeat;
       background-attachment: fixed;
     }
-    #app { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
+    #app { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
 
     /* ===== 顶栏：浅色半透明 ===== */
     #bar {
-      flex: 0 0 38px; display: flex; align-items: center; gap: 3px; padding: 0 6px;
+      flex: 0 0 32px; display: flex; align-items: center; gap: 3px; padding: 0 8px;
       background: rgba(255, 255, 255, 0.88);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
@@ -46,7 +46,7 @@
     button:active { background: rgba(0,0,0,0.13); }
     button.on { background: rgba(72, 187, 120, 0.15); border-color: rgba(72, 187, 120, 0.4); color: #2f855a; }
     button.muted { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35); color: #c53030; }
-    button.icon { width: 28px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+    button.icon { width: 30px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; }
     button.close-btn:hover { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #c53030; }
     button.primary { background: rgba(66, 153, 225, 0.15); border-color: rgba(66, 153, 225, 0.4); color: #2b6cb0; }
     button.primary:hover { background: rgba(66, 153, 225, 0.25); }
@@ -76,16 +76,70 @@
     #viewHost { display: flex; }
     webview { flex: 1 1 auto; width: 100%; height: 100%; min-width: 0; min-height: 0; }
     .hidden { display: none !important; }
+
+    /* ===== 响应式：窗口变小时自动精简顶栏 ===== */
+    @media (max-width: 540px) {
+      #favBtn, #histBtn, #tocBtn { display: none !important; }
+      #bar { padding: 0 4px; gap: 2px; }
+      #url { min-width: 36px; padding: 0 6px; font-size: 10px; }
+      #bar button.icon { width: 26px; }
+    }
+    @media (max-width: 360px) {
+      #reload, #searchModeBtn { display: none !important; }
+    }
+    @media (max-width: 540px) {
+      #novel { padding: 12px 16px 60px; }
+      #toc { width: 108px; flex: 0 0 108px; }
+    }
+
+    /* ===== “更多”菜单 ===== */
+    #moreMenu {
+      top: 40px; right: 8px; width: 248px;
+      max-height: calc(100vh - 60px); overflow-y: auto;
+      padding: 6px;
+    }
+    #moreMenu .mm-label {
+      font-size: 10px; font-weight: 600; color: #999; letter-spacing: 0.5px;
+      padding: 8px 8px 3px; user-select: none;
+    }
+    #moreMenu .mm-row {
+      display: flex; align-items: center; gap: 8px; padding: 2px 6px;
+      border-radius: 6px;
+    }
+    #moreMenu .mm-row:hover { background: rgba(0,0,0,0.04); }
+    #moreMenu .mm-row > span { flex: 1; font-size: 12px; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #moreMenu .mm-row select {
+      flex: 1; height: 26px; font-size: 11px; padding: 0 6px; min-width: 0;
+      border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; background: rgba(0,0,0,0.03); color: #444;
+    }
+    #moreMenu button.icon { width: 26px; height: 26px; flex-shrink: 0; }
+    #moreMenu .slider-group input[type="range"] { width: 88px !important; opacity: 1 !important; height: 22px; }
+    #moreMenu .mm-val { font-size: 11px; color: #666; min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+    #moreMenu .mm-sep { height: 1px; background: rgba(0,0,0,0.06); margin: 5px 8px; }
+
+    /* 透明度调节浮层提示（Alt+滚轮/快捷键时直接显示数字） */
+    #opacityToast {
+      position: fixed; top: 52px; right: 12px; z-index: 9999;
+      background: rgba(0,0,0,0.72); color: #fff; font-size: 12px;
+      padding: 4px 10px; border-radius: 6px; pointer-events: none;
+      opacity: 0; transition: opacity 0.2s ease;
+    }
+
+    /* ===== 阅读器 ===== */
+    #reader { position: relative; }
     /* 分屏模式 */
     #splitContainer { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; width: 100%; height: 100%; overflow: hidden; }
     #splitContainer.split { flex-direction: row; }
+    #splitContainer.split.reverse { flex-direction: row-reverse; }
+    #splitContainer.split.reverse #reader { border-left: none; border-right: 1px solid rgba(0,0,0,0.1); }
     #splitContainer.split #viewHost { flex: 0 0 55%; height: 100%; min-width: 0; }
     #splitContainer.split #reader { flex: 1 1 auto; display: flex !important; height: 100%; border-left: 1px solid rgba(0,0,0,0.1); min-width: 0; background: rgba(255,255,255,0.97); overflow: hidden; }
     #splitContainer.split #reader #novel { overflow: auto; }
     #splitContainer.split #reader #novel::-webkit-scrollbar { width: 4px; }
-    #splitDivider { width: 6px; cursor: col-resize; background: rgba(0,0,0,0.2); flex-shrink: 0; transition: background 0.2s; position: relative; z-index: 100; }
-    #splitDivider:hover { background: rgba(66,153,225,0.7); }
-    #splitDivider::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 3px; height: 28px; background: rgba(255,255,255,0.9); border-radius: 2px; }
+    #splitDivider { width: 12px; margin: 0 -6px; cursor: col-resize; background: transparent; flex-shrink: 0; transition: background 0.15s; position: relative; z-index: 200; pointer-events: auto; }
+    #splitDivider::before { content: ''; position: absolute; top: 0; bottom: 0; left: 5px; width: 1px; background: rgba(0,0,0,0.06); }
+    #splitDivider:hover { background: rgba(0,0,0,0.05); }
+    #splitDivider:hover::before { background: rgba(0,0,0,0.14); }
     #splitContainer.split #splitDivider { display: block !important; }
     /* 分屏空状态 */
     .split-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #999; font-size: 12px; gap: 8px; }
@@ -104,7 +158,7 @@
     #toc .i:hover { background: rgba(0,0,0,0.05); }
     #toc .i.on { background: rgba(66, 153, 225, 0.12); color: #2b6cb0; }
     #novel {
-      flex: 1; overflow: auto; padding: 20px 28px 48px; color: #2a2a2a; background: transparent;
+      flex: 1; overflow: auto; padding: 20px 28px 64px; color: #2a2a2a; background: transparent;
       font-size: 17px; line-height: 1.9; user-select: text;
     }
     #novel::-webkit-scrollbar { width: 5px; }
@@ -113,17 +167,38 @@
     #novel .p { text-indent: 2em; margin-bottom: 0.4em; white-space: pre-wrap; }
 
     /* ===== 本地视频 ===== */
-    #player { display: flex; align-items: center; justify-content: center; background: #000; }
+    #player { position: relative; display: flex; align-items: center; justify-content: center; background: #000; }
     #player video { width: 100%; height: 100%; object-fit: contain; }
+    #playerMsg { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: #999; font-size: 12px; padding: 12px; text-align: center; }
 
     /* ===== 去顶栏模式 ===== */
     #app.chrome-off #bar { display: none; }
     #dragStrip {
-      display: none; position: absolute; left: 0; right: 0; top: 0; height: 4px; z-index: 30;
-      -webkit-app-region: drag; transition: height 0.15s;
+      display: none; position: absolute; left: 0; right: 0; top: 0; height: 12px; z-index: 30;
+      -webkit-app-region: drag; transition: height 0.15s, background 0.15s;
     }
     #app.chrome-off #dragStrip { display: block; }
-    #dragStrip:hover { height: 8px; }
+    #dragStrip:hover { height: 20px; background: rgba(66,153,225,0.1); }
+    /* 顶部拖动区只在隐藏顶栏时启用，避免挡住网页点击 */
+    #topDragArea {
+      display: none; position: absolute; top: 0; left: 0; right: 0; height: 18px;
+      -webkit-app-region: drag; z-index: 31; pointer-events: auto;
+    }
+
+    /* ===== 去顶栏时的隐形拖动边框：上/左/右/下一圈，拖动面积大又不挡中间网页 ===== */
+    .edge-drag {
+      display: none; position: absolute; z-index: 32;
+      -webkit-app-region: drag; pointer-events: auto; background: transparent;
+    }
+    #app.chrome-off .edge-drag { display: block; }
+    #edgeTop    { top: 0; left: 0; right: 0; height: 40px; }
+    #edgeLeft   { top: 0; bottom: 0; left: 0; width: 24px; }
+    #edgeRight  { top: 0; bottom: 0; right: 0; width: 24px; }
+    #edgeBottom { left: 0; right: 0; bottom: 0; height: 24px; }
+    /* 悬停时淡淡高亮，提示这里能拖 */
+    .edge-drag:hover { background: rgba(66,153,225,0.06); }
+    #app.chrome-off #topDragArea { display: block; }
+    #topDragArea:hover { height: 28px; }
 
     /* ===== 弹窗 ===== */
     .modal {
@@ -189,7 +264,7 @@
     .row .hint { font-size: 11px; color: #999; }
     .section-title {
       font-size: 11px; font-weight: 600; color: #888; margin: 14px 0 5px;
-      padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.06);
+      padding: 10px 4px 6px; border-top: 1px solid rgba(0,0,0,0.06);
       text-transform: uppercase; letter-spacing: 0.5px;
       cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px;
     }
@@ -197,7 +272,6 @@
       content: '▾'; font-size: 10px; transition: transform 0.2s; display: inline-block;
     }
     .section-title.collapsed::before { transform: rotate(-90deg); }
-    .section-title.collapsed + * { display: none !important; }
     .collapse-hidden { display: none !important; }
     .section-reset {
       margin-left: auto; padding: 1px 6px; font-size: 10px; color: #999;
@@ -258,50 +332,14 @@
       <button id="reload" class="icon" title="刷新">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
       </button>
-      <button id="file" class="icon" title="打开 TXT / 本地视频">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-      </button>
+      <button id="searchModeBtn" class="icon" title="切换搜索模式（网页/小说）" style="min-width:36px;font-size:10px;font-weight:600;">网页</button>
       <input id="url" type="text" placeholder="网址 / 搜索" spellcheck="false" />
       <button id="go" class="primary icon" title="前往">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       </button>
       <select id="quickSite" title="快捷网站"></select>
-      <select id="speed" title="倍速">
-        <option value="0.75">0.75x</option>
-        <option value="1" selected>1x</option>
-        <option value="1.25">1.25x</option>
-        <option value="1.5">1.5x</option>
-        <option value="2">2x</option>
-        <option value="3">3x</option>
-      </select>
-      <div class="slider-group" id="muteGroup">
-        <button id="muteBtn" class="icon" title="一键静音">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-        </button>
-        <button id="mediaPlayBtn" class="hidden icon" title="播放/暂停">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        </button>
-      </div>
-      <button id="fontDown" class="hidden icon" title="字号减小">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
-      </button>
-      <button id="fontUp" class="hidden icon" title="字号增大">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3M9 20h6M12 4v16M17 14v6M14 17h6"/></svg>
-      </button>
       <button id="tocBtn" class="hidden icon" title="显示/隐藏目录">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-      </button>
-      <div class="slider-group" id="opacityGroup">
-        <button id="opacityBtn" class="icon" title="透明度（Alt+滚轮）">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/></svg>
-        </button>
-        <input id="opacity" type="range" min="20" max="100" value="100" />
-      </div>
-      <button id="pin" class="icon on" title="窗口始终浮在最前">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
-      </button>
-      <button id="splitBtn" class="icon" title="分屏模式（左视频右小说）">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
       </button>
       <button id="favBtn" class="icon" title="收藏夹">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -309,31 +347,102 @@
       <button id="histBtn" class="icon" title="历史记录">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </button>
-      <button id="searchBtn" class="icon" title="小说TXT搜索">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <button id="moreBtn" class="icon" title="更多功能">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
       </button>
-      <button id="hide" class="icon" title="一键藏起来">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-      </button>
-      <button id="helpBtn" class="icon" title="说明书">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      </button>
-      <button id="setBtn" class="icon" title="设置">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <button id="minBtn" class="icon" title="最小化">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
       <button id="close" class="icon close-btn" title="藏到托盘">×</button>
     </div>
+    <div id="opacityToast"></div>
+    <div id="moreMenu" class="dropdown">
+      <div class="mm-label">窗口</div>
+      <div class="mm-row"><button id="refreshApp" class="icon" title="刷新整个小窗（卡住时点这里）">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button><span>刷新小窗（卡住点这）</span></div>
+      <div class="mm-row"><button id="pin" class="icon on" title="窗口始终浮在最前">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+      </button><span>窗口置顶</span></div>
+      <div class="mm-row"><button id="hide" class="icon" title="一键藏起来">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button><span>一键隐身</span></div>
+      <div class="mm-row"><button id="file" class="icon" title="打开 TXT / 本地视频">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button><span>打开 TXT / 本地视频</span></div>
+      <div class="mm-row"><button id="searchBtn" class="icon" title="小说历史">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </button><span>小说历史</span></div>
+      <div class="mm-row"><button id="setBtn" class="icon" title="设置">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button><span>设置</span></div>
+      <div class="mm-row"><button id="helpBtn" class="icon" title="说明书">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </button><span>使用说明</span></div>
+      <div class="mm-sep"></div>
+      <div class="mm-label">分屏</div>
+      <div class="mm-row"><button id="splitBtn" class="icon" title="分屏模式（左视频右小说）">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+      </button><span>开启/关闭分屏</span></div>
+      <div class="mm-row hidden" id="swapRow"><button id="swapBtn" class="icon" title="交换左右位置">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      </button><span>交换左右位置</span></div>
+      <div class="mm-sep"></div>
+      <div class="mm-label">播放</div>
+      <div class="mm-row"><select id="speed" title="倍速">
+        <option value="0.75">0.75x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2">2x</option>
+        <option value="3">3x</option>
+      </select><span>倍速</span></div>
+      <div class="mm-row hidden" id="mediaPlayRow"><button id="mediaPlayBtn" class="icon" title="播放/暂停">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button><span>播放 / 暂停</span></div>
+      <div class="mm-row" id="muteGroup"><button id="muteBtn" class="icon" title="一键静音">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      </button><span>静音</span></div>
+      <div class="mm-sep"></div>
+      <div class="mm-label">阅读</div>
+      <div class="mm-row hidden" id="fontRow">
+        <button id="fontDown" class="icon" title="字号减小">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+        </button>
+        <button id="fontUp" class="icon" title="字号增大">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3M9 20h6M12 4v16M17 14v6M14 17h6"/></svg>
+        </button>
+        <span>字号（Ctrl+滚轮）</span>
+      </div>
+      <div class="mm-sep"></div>
+      <div class="mm-label">透明度</div>
+      <div class="mm-row">
+        <div class="slider-group open" id="opacityGroup" style="display:flex;align-items:center;gap:6px;flex:1;">
+          <button id="opacityBtn" class="icon" title="透明度（Alt+滚轮）">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/></svg>
+          </button>
+          <input id="opacity" type="range" min="5" max="100" value="100" />
+          <span id="opacityVal" class="mm-val">100%</span>
+        </div>
+      </div>
+    </div>
     <div id="main">
       <div id="dragStrip" title="拖动 · 双击恢复顶栏"></div>
+      <div id="topDragArea"></div>
+      <div id="edgeTop" class="edge-drag" title="拖动窗口 · 双击恢复顶栏"></div>
+      <div id="edgeLeft" class="edge-drag" title="拖动窗口"></div>
+      <div id="edgeRight" class="edge-drag" title="拖动窗口"></div>
+      <div id="edgeBottom" class="edge-drag" title="拖动窗口"></div>
       <div id="splitContainer">
         <div id="viewHost"><webview id="view" partition="persist:pip"></webview></div>
         <div id="splitDivider" class="hidden"></div>
         <div id="reader" class="hidden">
           <div id="toc"></div>
           <div id="novel"></div>
+
         </div>
       </div>
-      <div id="player" class="hidden"><video id="video" controls></video></div>
+      <div id="player" class="hidden"><video id="video" controls></video><div id="playerMsg"></div></div>
 
       <!-- 说明书 -->
       <div id="helpModal" class="modal">
@@ -381,7 +490,7 @@
             <ul style="margin-top:0;padding-left:18px;">
               <li>背景图片、快速搜索源、顶栏按钮显示</li>
               <li>热键（老板键等）、外观（标题/字体）</li>
-              <li>快捷网站、小说搜索源、桌面浮动球</li>
+              <li>快捷网站、小说搜索源</li>
               <li>每个分类都有"恢复默认"，不怕改坏</li>
             </ul>
             <p style="margin-bottom:4px;"><b>常见问题</b>：</p>
@@ -453,6 +562,18 @@
               <option value="monospace">等宽</option>
             </select>
           </div>
+          <div class="row">
+            <label>小说行距</label>
+            <select id="novelLineHeight">
+              <option value="1.4">紧凑 1.4</option>
+              <option value="1.6">1.6</option>
+              <option value="1.8">1.8</option>
+              <option value="1.9" selected>舒适 1.9</option>
+              <option value="2.0">2.0</option>
+              <option value="2.2">宽松 2.2</option>
+              <option value="2.4">2.4</option>
+            </select>
+          </div>
 
           <div class="section-title">快捷网站</div>
           <p style="font-size:11px;color:#999;margin-bottom:4px;">每行一个，格式：名称,网址</p>
@@ -474,15 +595,15 @@
             <input id="bossTransparent" type="checkbox" />
             <span class="hint">失焦自动变透明</span>
           </div>
-          <div class="row" style="display:none;">
-            <label style="width:auto;">桌面浮动球</label>
-            <input id="floatBall" type="checkbox" />
-            <span class="hint">隐身后桌面留小球，点击恢复</span>
-          </div>
           <div class="row">
             <label style="width:auto;">媒体控制栏</label>
             <input id="mediaControls" type="checkbox" />
             <span class="hint">顶栏显示播放/暂停按钮</span>
+          </div>
+          <div class="row">
+            <label style="width:auto;">隐身/失焦暂停</label>
+            <input id="pauseOnBlur" type="checkbox" />
+            <span class="hint">隐藏窗口或失焦时暂停视频/音频</span>
           </div>
           <div class="row">
             <label>透明程度</label>
@@ -548,31 +669,13 @@
       </div>
 
       <!-- 小说搜索面板 -->
-      <div id="searchPanel" class="dropdown" style="width:340px;max-height:420px;overflow-y:auto;">
+      <div id="searchPanel" class="dropdown" style="width:272px;max-height:300px;overflow-y:auto;">
         <div class="dropdown-header">
-          <span>小说TXT搜索</span>
+          <span>小说历史</span>
           <span id="searchBack" style="cursor:pointer;color:#4299e1;font-size:11px;display:none;">← 返回</span>
         </div>
         <div style="padding:10px;">
-          <!-- 搜索模式切换 -->
-          <div style="display:flex;gap:4px;margin-bottom:8px;">
-            <button id="searchModeQuick" class="primary" style="flex:1;padding:4px;font-size:11px;">快速搜索</button>
-            <button id="searchModeBookSource" style="flex:1;padding:4px;font-size:11px;">书源解析</button>
-          </div>
-          <!-- 快速搜索区 -->
-          <div id="quickSearchArea">
-            <select id="quickSearchSource" style="width:100%;padding:4px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-size:12px;margin-bottom:6px;"></select>
-            <input id="quickSearchKeyword" type="text" placeholder="输入书名搜索" style="width:100%;padding:6px 8px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-size:12px;box-sizing:border-box;margin-bottom:6px;" />
-            <button id="quickSearchBtn" class="primary" style="width:100%;padding:6px;font-size:12px;">搜索</button>
-            <p style="font-size:10px;color:#999;margin-top:6px;">直接跳转到网站搜索页，在网页里看小说</p>
-          </div>
-          <!-- 书源搜索区 -->
-          <div id="bookSourceSearchArea" style="display:none;">
-            <select id="bookSource" style="width:100%;padding:4px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-size:12px;margin-bottom:6px;"></select>
-            <input id="searchKeyword" type="text" placeholder="输入书名搜索" style="width:100%;padding:6px 8px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-size:12px;box-sizing:border-box;margin-bottom:6px;" />
-            <button id="doSearch" class="primary" style="width:100%;padding:6px;font-size:12px;">搜索</button>
-            <p style="font-size:10px;color:#999;margin-top:6px;">解析书源，直接在阅读器里看正文（部分老书源可能失效）</p>
-          </div>
+          <div style="font-size:11px;color:#999;margin-bottom:8px;">保留最近阅读记录，TXT/在线小说都会记录进度。</div>
           <!-- 搜索结果 -->
           <div id="searchResults" style="margin-top:8px;display:none;"></div>
           <!-- 章节列表 -->
@@ -603,21 +706,27 @@
     let darkMode = false;
     let autoRefresh = 0;
     let autoRefreshTimer = null;
-    let bossTransparent = true;
+    let bossTransparent = false; // 失焦自动透明，默认关闭
     let bossOpacity = 0.25;
-    let floatBall = false;
     let mediaControls = false;
+    let pauseOnBlur = true;
     let splitMode = false;
     let splitRatio = 0.5; // 左边占比
+    let splitReversed = false; // 左右是否交换
+    let lastMode = 'web';     // 会话模式：web / book / video
+    let lastVideoPath = '';   // 当前本地视频路径
+    let lineHeight = 1.9;     // 小说行距
     let favorites = [];
     let history = [];
+    let novelHistory = []; // 小说阅读历史
+    let historyTab = 'web'; // 历史记录面板当前标签：web / novel
+    let urlSearchMode = 'web'; // 地址栏搜索模式：web / novel
     let searchSources = { novel: [] };
     let customSearchSources = [];
     let bookSources = [];
     let currentBook = null;
     let currentChapters = [];
     let currentSourceIndex = 0;
-    let searchMode = 'quick'; // quick 或 bookSource
     // 默认快速搜索源（直接跳转网站搜索页，保证能用）
     const DEFAULT_QUICK_SOURCES = [
       { name: '七猫小说', url: 'https://www.qimao.com/search/?keyword={k}' },
@@ -654,50 +763,106 @@
 
     // 应用媒体控制栏显示
     function applyMediaControls() {
-      const btn = $('mediaPlayBtn');
-      if (!btn) return;
-      if (mediaControls && mode === 'web') btn.classList.remove('hidden');
-      else btn.classList.add('hidden');
+      const row = $('mediaPlayRow');
+      if (!row) return;
+      if (mediaControls && mode === 'web') row.classList.remove('hidden');
+      else row.classList.add('hidden');
+    }
+
+    // 进入分屏 UI（切换/启动恢复共用）
+    function enterSplitUI() {
+      const container = $('splitContainer');
+      const divider = $('splitDivider');
+      const reader = $('reader');
+      const viewHost = $('viewHost');
+      container.classList.add('split');
+      divider.classList.remove('hidden');
+      viewHost.style.flex = '';
+      // 分屏时始终显示reader，如果之前有小说内容就保留，没有就显示空状态
+      reader.classList.remove('hidden');
+      if (!$('novel').innerHTML || $('novel').querySelector('.split-empty') || $('novel').innerHTML === '') {
+        if (!$('novel').querySelector('.split-empty')) {
+          $('toc').classList.add('hidden');
+          $('novel').innerHTML = '<div class="split-empty"><div style="font-size:14px;font-weight:500;margin-bottom:8px;">右边看小说</div><div style="font-size:11px;opacity:0.7;">点「更多 → 打开 TXT/本地视频」或「小说搜索」开始阅读</div></div>';
+        }
+      }
+      if (splitReversed) container.classList.add('reverse');
+      applySplitRatio();
+      setTimeout(relayoutWeb, 50);
+      // 默认激活当前主导侧；退出后会沿用这侧作为单栏主视图
+      setActivePanel(activePanel === 'right' ? 'right' : 'left');
+      $('splitBtn').classList.add('on');
+      $('swapRow').classList.remove('hidden');
+      $('splitBtn').title = '再次点击取消分屏';
+    }
+
+    // 退出分屏 UI
+    function exitSplitUI() {
+      const container = $('splitContainer');
+      const divider = $('splitDivider');
+      const reader = $('reader');
+      const viewHost = $('viewHost');
+      const dominant = activePanel === 'right' ? 'book' : 'web';
+      container.classList.remove('split');
+      divider.classList.add('hidden');
+      viewHost.style.flex = '';
+      reader.style.background = '';
+      // 退出分屏后，按当前选中的一侧回到单栏主导视图
+      setMode(dominant);
+      if (dominant === 'web') reader.classList.add('hidden');
+      else viewHost.classList.add('hidden');
+      setTimeout(relayoutWeb, 50);
+      setActivePanel(null);
+      $('splitBtn').classList.remove('on');
+      $('swapRow').classList.add('hidden');
+      $('splitBtn').title = '分屏模式（左视频右小说）';
     }
 
     // 切换分屏模式
     function toggleSplit() {
       splitMode = !splitMode;
-      const container = $('splitContainer');
-      const divider = $('splitDivider');
-      const reader = $('reader');
-      const viewHost = $('viewHost');
       // 关闭所有下拉面板
       document.querySelectorAll('.dropdown.show').forEach(function(d) { d.classList.remove('show'); });
       if (splitMode) {
-        container.classList.add('split');
-        divider.classList.remove('hidden');
-        viewHost.style.flex = '';
-        // 如果当前不是小说模式，reader 显示空状态
-        if (mode !== 'book') {
-          reader.classList.remove('hidden');
-          $('toc').classList.add('hidden');
-          $('novel').innerHTML = '<div class="split-empty"><div style="font-size:14px;font-weight:500;margin-bottom:8px;">右边看小说</div><div style="font-size:11px;opacity:0.7;">点顶栏文件夹按钮打开TXT，或搜索按钮搜小说</div></div>';
-        }
-        applySplitRatio();
-        setTimeout(relayoutWeb, 50);
+        enterSplitUI();
       } else {
-        // 退出分屏：彻底清理
-        container.classList.remove('split');
-        divider.classList.add('hidden');
-        viewHost.style.flex = '';
-        reader.style.background = '';
-        // 如果不是小说模式，隐藏 reader，并清除空状态内容
-        if (mode !== 'book') {
-          reader.classList.add('hidden');
-          // 只有当内容是空状态时才清除，避免清除用户正在看的小说
-          if ($('novel').querySelector('.split-empty')) {
-            $('novel').innerHTML = '';
-          }
-        }
-        setTimeout(relayoutWeb, 50);
+        exitSplitUI();
       }
-      $('splitBtn').classList.toggle('on', splitMode);
+      saveUiState();
+    }
+
+    // 交换左右位置
+    function swapSplit() {
+      $('splitContainer').classList.toggle('reverse');
+      splitReversed = $('splitContainer').classList.contains('reverse');
+      saveUiState();
+    }
+
+    // 设置当前激活的分屏区域（高亮2秒后消失）
+    let activePanel = null;
+    let activeTimer = null;
+    function setActivePanel(side) {
+      activePanel = side;
+      const viewHost = $('viewHost');
+      const reader = $('reader');
+      if (side === 'left') {
+        viewHost.style.boxShadow = 'inset 0 0 0 2px rgba(66,153,225,0.6)';
+        reader.style.boxShadow = 'none';
+      } else if (side === 'right') {
+        viewHost.style.boxShadow = 'none';
+        reader.style.boxShadow = 'inset 0 0 0 2px rgba(66,153,225,0.6)';
+      } else {
+        viewHost.style.boxShadow = 'none';
+        reader.style.boxShadow = 'none';
+      }
+      // 2秒后自动消失
+      if (activeTimer) clearTimeout(activeTimer);
+      if (side) {
+        activeTimer = setTimeout(function() {
+          viewHost.style.boxShadow = 'none';
+          reader.style.boxShadow = 'none';
+        }, 1500);
+      }
     }
 
     // 应用分屏比例
@@ -721,11 +886,20 @@
         document.body.style.userSelect = 'none';
       });
 
+      let rafId = null;
+      let pendingRatio = null;
       divider.addEventListener('pointermove', function(e) {
         if (!dragging) return;
         const rect = container.getBoundingClientRect();
-        splitRatio = Math.max(0.2, Math.min(0.8, (e.clientX - rect.left) / rect.width));
-        applySplitRatio();
+        pendingRatio = Math.max(0.15, Math.min(0.85, (e.clientX - rect.left) / rect.width));
+        if (rafId) return;
+        rafId = requestAnimationFrame(function() {
+          rafId = null;
+          if (pendingRatio != null) {
+            splitRatio = pendingRatio;
+            applySplitRatio();
+          }
+        });
       });
 
       function endDrag(e) {
@@ -734,6 +908,7 @@
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         try { divider.releasePointerCapture(e.pointerId); } catch(err) {}
+        saveUiState(); // 拖动结束保存分屏比例
       }
       divider.addEventListener('pointerup', endDrag);
       divider.addEventListener('pointercancel', endDrag);
@@ -763,31 +938,63 @@
 
     function relayoutWeb() {
       const host = $('viewHost');
-      if (!host || mode !== 'web') return;
-      view.style.width = host.clientWidth + 'px';
-      view.style.height = host.clientHeight + 'px';
+      // 分屏时 viewHost 始终可见，即使 mode 不是 web 也要同步尺寸，否则 webview 卡空白
+      if (!host || (mode !== 'web' && !splitMode)) return;
+      // viewHost 隐藏时 clientWidth 为 0，跳过避免把 webview 尺寸设成 0 卡死
+      const w = host.clientWidth, h = host.clientHeight;
+      if (w <= 0 || h <= 0) return;
+      view.style.width = w + 'px';
+      view.style.height = h + 'px';
     }
 
     function setMode(m) {
-      mode = m;
+      if (mode !== m) { mode = m; saveUiState(); }
       $('viewHost').classList.toggle('hidden', m !== 'web' && !splitMode);
       $('reader').classList.toggle('hidden', m !== 'book' && !splitMode);
       $('player').classList.toggle('hidden', m !== 'video');
-      $('fontUp').classList.toggle('hidden', m !== 'book');
-      $('fontDown').classList.toggle('hidden', m !== 'book');
-      $('tocBtn').classList.toggle('hidden', m !== 'book');
-      $('speed').style.display = (toolbarCfg.speed && (m === 'web' || m === 'video')) ? '' : 'none';
+      $('fontRow').classList.toggle('hidden', m !== 'book');
+      $('tocBtn').classList.toggle('hidden', m !== 'book' && !splitMode);
+      $('speed').style.display = toolbarCfg.speed ? '' : 'none';
       if (m === 'web') { setTimeout(relayoutWeb, 0); restartAutoRefresh(); }
       else { if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; } }
       applyMediaControls();
+      // 更新目录快捷键提示
+      const hintEl = $('tocHint');
+      if (hintEl) {
+        if ((m === 'book' || splitMode) && hotkeys && hotkeys.toc) {
+          hintEl.textContent = '按 ' + hotkeys.toc + ' 切换目录';
+          hintEl.style.display = '';
+        } else {
+          hintEl.style.display = 'none';
+        }
+      }
     }
 
     function applyToolbar() {
       $('quickSite').style.display = toolbarCfg.quickSite ? '' : 'none';
-      $('speed').style.display = (toolbarCfg.speed && (mode === 'web' || mode === 'video')) ? '' : 'none';
+      $('speed').style.display = toolbarCfg.speed ? '' : 'none';
       $('muteGroup').style.display = toolbarCfg.mute ? '' : 'none';
       $('opacityGroup').style.display = toolbarCfg.opacity ? '' : 'none';
       $('helpBtn').style.display = toolbarCfg.help ? '' : 'none';
+    }
+
+    // 透明度统一设置：滑块 + 数值显示 + 主进程 + 浮层提示
+    function applyOpacityUI(v, showToast) {
+      // 下限 5%，允许很透明但不至于完全消失
+      v = Math.max(5, Math.min(100, Math.round(v)));
+      $('opacity').value = String(v);
+      const val = $('opacityVal');
+      if (val) val.textContent = v + '%';
+      window.stealth.setOpacity(v / 100);
+      if (showToast) {
+        const toast = $('opacityToast');
+        if (toast) {
+          toast.textContent = '透明度 ' + v + '%';
+          toast.style.opacity = '1';
+          clearTimeout(toast._t);
+          toast._t = setTimeout(function() { toast.style.opacity = '0'; }, 1200);
+        }
+      }
     }
 
     function normalizeUrl(raw) {
@@ -815,7 +1022,7 @@
 
     function applySpeed() {
       if (mode === 'video') { $('video').playbackRate = speed; return; }
-      if (mode !== 'web') return;
+      if (mode !== 'web' && !splitMode) return;
       // 主进程 set-speed 会遍历所有 webContents（包括 iframe）应用倍速
       window.stealth.setSpeed(speed);
     }
@@ -916,9 +1123,46 @@
 
     // 暂停 webview 里所有视频 + 静音（老板键用，主进程已处理，这里保留备用）
     function pauseAllMedia() {
-      if (mode === 'video') {
-        try { $('video').pause(); $('video').muted = true; } catch (e) {}
-      }
+      try {
+        if (mode === 'video') {
+          const v = $('video');
+          if (v && !v.paused) {
+            v.pause();
+            window._videoPausedByBlur = true;
+          } else {
+            window._videoPausedByBlur = false;
+          }
+        } else if (mode === 'web') {
+          view.setAudioMuted(true);
+          view.executeJavaScript("try{document.querySelectorAll('video,audio').forEach(function(v){if(!v.paused){v.pause();v._pausedByBlur=true;}else{v._pausedByBlur=false;}});}catch(e){}");
+          window._webPausedByBlur = true;
+        } else if (splitMode) {
+          try { view.setAudioMuted(true); } catch (e) {}
+          try { view.executeJavaScript("try{document.querySelectorAll('video,audio').forEach(function(v){if(!v.paused){v.pause();v._pausedByBlur=true;}else{v._pausedByBlur=false;}});}catch(e){}"); } catch (e) {}
+          window._webPausedByBlur = true;
+        }
+      } catch (e) {}
+    }
+
+    function resumeAllMedia() {
+      try {
+        if (mode === 'video') {
+          const v = $('video');
+          if (v && window._videoPausedByBlur) {
+            v.muted = !!isMuted;
+            v.play();
+            window._videoPausedByBlur = false;
+          }
+        } else if (mode === 'web') {
+          view.setAudioMuted(!!isMuted);
+          view.executeJavaScript("try{document.querySelectorAll('video,audio').forEach(function(v){if(v._pausedByBlur){v.play();v._pausedByBlur=false;}});}catch(e){}");
+          window._webPausedByBlur = false;
+        } else if (splitMode) {
+          try { view.setAudioMuted(!!isMuted); } catch (e) {}
+          try { view.executeJavaScript("try{document.querySelectorAll('video,audio').forEach(function(v){if(v._pausedByBlur){v.play();v._pausedByBlur=false;}});}catch(e){}"); } catch (e) {}
+          window._webPausedByBlur = false;
+        }
+      } catch (e) {}
     }
 
     // ===== 收藏夹 =====
@@ -962,23 +1206,110 @@
     // ===== 历史记录 =====
     function renderHistory() {
       const list = $('histList');
-      if (!history.length) {
-        list.innerHTML = '<div class="dropdown-empty">暂无浏览记录</div>';
-        return;
+      const tabs = '<div style="display:flex;gap:4px;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.06);">' +
+        '<button class="hist-tab" data-tab="web" style="flex:1;padding:4px 8px;border:1px solid ' + (historyTab === 'web' ? '#4299e1' : '#ddd') + ';border-radius:4px;background:' + (historyTab === 'web' ? '#4299e1' : '#fff') + ';color:' + (historyTab === 'web' ? '#fff' : '#333') + ';font-size:11px;cursor:pointer;">网页</button>' +
+        '<button class="hist-tab" data-tab="novel" style="flex:1;padding:4px 8px;border:1px solid ' + (historyTab === 'novel' ? '#4299e1' : '#ddd') + ';border-radius:4px;background:' + (historyTab === 'novel' ? '#4299e1' : '#fff') + ';color:' + (historyTab === 'novel' ? '#fff' : '#333') + ';font-size:11px;cursor:pointer;">小说</button>' +
+        '</div>';
+      if (historyTab === 'web') {
+        if (!history.length) {
+          list.innerHTML = tabs + '<div class="dropdown-empty">暂无浏览记录</div>';
+        } else {
+          list.innerHTML = tabs + history.map(function(h) {
+            const time = new Date(h.time).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            return '<div class="dropdown-item" data-url="' + h.url + '">' +
+              '<span class="title" title="' + h.title + '">' + h.title + '</span>' +
+              '<span style="color:#999;font-size:10px;margin-left:8px;">' + time + '</span></div>';
+          }).join('');
+        }
+        list.querySelectorAll('.dropdown-item').forEach(function(item) {
+          item.onclick = function() {
+            const url = item.dataset.url;
+            $('histDropdown').classList.remove('show');
+            setMode('web'); view.src = url; $('url').value = url; window.stealth.saveUrl(url);
+          };
+        });
+      } else {
+        if (!novelHistory.length) {
+          list.innerHTML = tabs + '<div class="dropdown-empty">暂无小说阅读记录</div>';
+        } else {
+          list.innerHTML = tabs + novelHistory.map(function(h, idx) {
+            const time = new Date(h.time).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            const name = h.book && h.book.name ? h.book.name : '未知小说';
+            const chap = h.chapterTitle || ('第' + (h.chapter + 1) + '章');
+            return '<div class="dropdown-item" data-idx="' + idx + '">' +
+              '<span class="title" title="' + name + '">' + name + '</span>' +
+              '<span style="color:#666;font-size:10px;margin-left:8px;">' + chap + '</span>' +
+              '<span style="color:#999;font-size:10px;margin-left:8px;">' + time + '</span></div>';
+          }).join('');
+        }
+        list.querySelectorAll('.dropdown-item').forEach(function(item) {
+          item.onclick = async function() {
+            const idx = Number(item.dataset.idx);
+            const h = novelHistory[idx];
+            if (!h) return;
+            $('histDropdown').classList.remove('show');
+            if (h.book && h.book.source === 'txt') {
+              const data = await window.stealth.openTxtPath(h.book.filePath);
+              if (data && !data.error) { openBook(data); return; }
+              alert('文件不存在或已被移动');
+              return;
+            }
+            currentBook = h.book;
+            currentChapters = h.chapters;
+            currentSourceIndex = h.sourceIndex || 0;
+            progressKey = h.progressKey || ('novel_' + (currentBook.id || currentBook.name));
+            setMode('book');
+            renderToc(currentChapters, currentBook);
+            chap = h.chapter || 0;
+            fontSize = h.fontSize || fontSize;
+            $('novel').style.fontSize = fontSize + 'px';
+            await loadChapter(chap, false);
+            if (h.ratio != null) {
+              setTimeout(function() {
+                const el = $('novel');
+                const max = Math.max(1, el.scrollHeight - el.clientHeight);
+                el.scrollTop = h.ratio * max;
+              }, 100);
+            }
+          };
+        });
       }
-      list.innerHTML = history.map(function(h) {
-        const time = new Date(h.time).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-        return '<div class="dropdown-item" data-url="' + h.url + '">' +
-          '<span class="title" title="' + h.title + '">' + h.title + '</span>' +
-          '<span style="color:#999;font-size:10px;margin-left:8px;">' + time + '</span></div>';
-      }).join('');
-      list.querySelectorAll('.dropdown-item').forEach(function(item) {
-        item.onclick = function() {
-          const url = item.dataset.url;
-          $('histDropdown').classList.remove('show');
-          setMode('web'); view.src = url; $('url').value = url; window.stealth.saveUrl(url);
+      list.querySelectorAll('.hist-tab').forEach(function(tab) {
+        tab.onclick = function(e) {
+          e.stopPropagation();
+          historyTab = tab.dataset.tab;
+          renderHistory();
         };
       });
+    }
+    function addToNovelHistory(book, chapters, chapter, chapterTitle, ratio) {
+      if (!book) return;
+      // TXT 不存完整章节数组（体积过大），恢复时重新读文件
+      const isTxt = book.source === 'txt';
+      if (!isTxt && (!chapters || !chapters.length)) return;
+      // 去重：如果同一本书已经在历史里，更新它
+      const existIdx = novelHistory.findIndex(function(h) {
+        return h.book && h.book.name === book.name;
+      });
+      const item = {
+        book: book,
+        chapters: isTxt ? null : chapters,
+        chapter: chapter,
+        chapterTitle: chapterTitle,
+        ratio: ratio,
+        sourceIndex: currentSourceIndex,
+        progressKey: progressKey,
+        fontSize: fontSize,
+        time: Date.now()
+      };
+      if (existIdx >= 0) {
+        novelHistory.splice(existIdx, 1);
+      }
+      novelHistory.unshift(item);
+      // 最多保留20条
+      if (novelHistory.length > 20) novelHistory = novelHistory.slice(0, 20);
+      // 保存到配置
+      try { window.stealth.saveProgress('novel-history', novelHistory); } catch (e) {}
     }
     function addToHistory(url, title) {
       if (!url || url.startsWith('file:') || url.indexOf('welcome.html') >= 0) return;
@@ -994,6 +1325,40 @@
       sel.innerHTML = sources.map(function(s, i) {
         return '<option value="' + i + '">' + s.name + '</option>';
       }).join('');
+    }
+
+    // HTML 转义，防止书名/作者/简介里的特殊字符破坏 DOM 或 XSS
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // 小说搜索（地址栏小说模式）：调用统一书源聚合搜索
+    async function doNovelSearch(keyword) {
+      keyword = (keyword || '').trim();
+      if (!keyword) return;
+      const box = $('searchResults');
+      if (box) {
+        box.style.display = 'block';
+        box.innerHTML = '<div style="padding:20px;text-align:center;color:#999;font-size:12px;">搜索中...</div>';
+      }
+      try {
+        const result = await window.stealth.novelSearch(keyword);
+        const list = (result && Array.isArray(result.results)) ? result.results
+                   : (Array.isArray(result) ? result : []);
+        if (list.length === 0) {
+          if (box) box.innerHTML = '<div style="padding:20px;text-align:center;color:#999;font-size:12px;">没有找到相关书籍</div>';
+          return;
+        }
+        renderUnifiedSearchResults(list);
+      } catch (e) {
+        if (box) box.innerHTML = '<div style="padding:20px;text-align:center;color:#e53e3e;font-size:12px;">搜索失败：' + escapeHtml(e && e.message) + '</div>';
+      }
     }
 
     // 渲染搜索结果
@@ -1021,7 +1386,6 @@
     let unifiedResults = [];
     function renderUnifiedSearchResults(results) {
       unifiedResults = results;
-      $('bookSourceSearchArea').style.display = 'none';
       $('searchResults').style.display = 'block';
       $('searchBack').style.display = 'inline';
       $('searchResults').innerHTML = results.map(function(book, i) {
@@ -1092,25 +1456,52 @@
       }
     }
 
-    // 加载统一书源的章节正文
+    // 加载统一书源的章节正文（接入完整阅读器：目录/进度/行距/上下章）
     async function loadUnifiedContent(book, chapter) {
       $('searchPanel').classList.remove('show');
+      currentBook = book;
+      progressKey = 'novel_' + (book.id || book.name);
+      // 构建 novel（统一 loader，按需拉取正文）
+      novel = {
+        _bookKey: book.id || book.name,
+        title: book.name || '在线小说',
+        chapters: (currentChapters || []).map(function(ch, i) {
+          return {
+            title: ch.title || ('第' + (i + 1) + '章'),
+            lines: null, _loaded: false,
+            _loader: (function(ch2) {
+              return async function() {
+                const r = await window.stealth.novelContent(book, ch2);
+                return r.ok ? r.content : ('（加载失败: ' + (r.error || '未知错误') + '）');
+              };
+            })(ch)
+          };
+        })
+      };
+      // 定位当前章节索引
+      let idx = 0;
+      for (let i = 0; i < (currentChapters || []).length; i++) {
+        const c = currentChapters[i];
+        if (c === chapter || (chapter && (c.id === chapter.id || c.title === chapter.title))) { idx = i; break; }
+      }
       setMode('book');
-      $('toc').classList.add('hidden');
-      $('novel').innerHTML = '<div style="padding:40px;text-align:center;color:#999;">加载中...</div>';
-      try {
-        const result = await window.stealth.novelContent(book, chapter);
-        if (result.ok) {
-          $('novel').innerHTML = '<h2 style="text-align:center;margin-bottom:20px;">' + escapeHtml(chapter.title || '') + '</h2>' +
-            result.content.split('\n').map(function(p) { return p.trim() ? '<p style="margin-bottom:12px;text-indent:2em;">' + escapeHtml(p) + '</p>' : ''; }).join('');
-          $('novel').scrollTop = 0;
-          // 保存阅读进度
-          try { window.stealth.saveProgress(book.id || book.name, { chapter: chapter.title || chapter.index, offset: 0 }); } catch(e) {}
-        } else {
-          $('novel').innerHTML = '<div style="padding:40px;text-align:center;color:#999;">加载失败: ' + result.error + '</div>';
-        }
-      } catch (e) {
-        $('novel').innerHTML = '<div style="padding:40px;text-align:center;color:#999;">加载出错: ' + e.message + '</div>';
+      renderToc(currentChapters || [], book);
+      // 恢复上次阅读进度
+      const p = await window.stealth.loadProgress(progressKey);
+      if (p) {
+        if (p.chap != null) idx = p.chap;
+        fontSize = p.fontSize || fontSize;
+        novelFont = p.novelFont || novelFont;
+        lineHeight = Number(p.lineHeight) || lineHeight;
+      }
+      await loadChapter(idx, false);
+      // 恢复滚动位置
+      if (p && p.ratio != null) {
+        setTimeout(function() {
+          const el = $('novel');
+          const max = Math.max(1, el.scrollHeight - el.clientHeight);
+          el.scrollTop = p.ratio * max;
+        }, 100);
       }
     }
 
@@ -1145,6 +1536,11 @@
     // 打开章节（创建完整目录，按需加载正文）
     async function openChapter(chapterList, startIndex) {
       $('searchPanel').classList.remove('show');
+      // 设置在线小说的书籍状态（用于历史记录 / 启动恢复）
+      if (!currentBook) {
+        currentBook = { id: 'online:novel', name: '在线小说', source: 'online' };
+      }
+      currentChapters = chapterList;
       // 构造 novel 对象：所有章节标题，内容为空（懒加载）
       novel = {
         title: currentBook ? currentBook.name : '在线小说',
@@ -1176,7 +1572,21 @@
     async function loadOnlineChapter(index) {
       if (!novel || !novel.chapters || !novel.chapters[index]) return;
       const c = novel.chapters[index];
-      if (c._loaded || !c._url) return;
+      if (c._loaded) return;
+      // 统一书源（番茄/bs_N）：走 novelContent 分发
+      if (c._loader) {
+        c._loaded = true;
+        try {
+          const content = await c._loader();
+          c.lines = String(content || '').split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
+          if (!c.lines.length) c.lines = ['（本章无内容）'];
+        } catch (e) {
+          c.lines = ['（加载出错: ' + e.message + '）'];
+          c._loaded = false; // 失败后允许重试
+        }
+        return;
+      }
+      if (!c._url) return;
       c._loaded = true; // 标记为已加载（防止重复加载）
       try {
         const result = await window.stealth.getChapterContent(currentSourceIndex, c._url);
@@ -1197,6 +1607,7 @@
       const box = $('novel');
       box.style.fontSize = fontSize + 'px';
       box.style.fontFamily = novelFont;
+      box.style.lineHeight = lineHeight;
       // 在线小说懒加载：内容为空时先显示加载中，然后异步拉正文
       if (c.lines === null || c.lines === undefined) {
         box.innerHTML = '<div class="t"></div>';
@@ -1229,19 +1640,122 @@
         box.scrollTop = typeof ratio === 'number' ? max * ratio : 0;
         saveProg();
       });
+      noteBookOpen();
     }
 
+    // 渲染目录（历史恢复/启动恢复共用）
+    function renderToc(chapters, book) {
+      const toc = $('toc');
+      if (!toc) return;
+      toc.classList.remove('hidden');
+      toc.innerHTML = '<div class="h">目录 ' + chapters.length + '</div>';
+      chapters.forEach(function(c, i) {
+        const el = document.createElement('div');
+        el.className = 'i';
+        el.textContent = c.title || ('第' + (i + 1) + '章');
+        el.onclick = function() { showChap(i, 0); };
+        toc.appendChild(el);
+      });
+    }
+
+    // 加载并显示指定章节（历史恢复/启动恢复/章节切换共用）
+    async function loadChapter(idx, save) {
+      const bookKey = currentBook ? (currentBook.id || currentBook.name || '') : '';
+      const needRebuild = !novel || !novel.chapters || !novel.chapters.length ||
+        (bookKey && novel._bookKey !== bookKey);
+      if (needRebuild) {
+        if (!currentBook || !currentChapters || !currentChapters.length) return;
+        const unified = currentBook.source === 'fanqie' || (currentBook.source && currentBook.source.indexOf('bs_') === 0);
+        if (unified) {
+          const book = currentBook;
+          novel = {
+            _bookKey: bookKey,
+            title: currentBook.name || '在线小说',
+            chapters: currentChapters.map(function(ch, i) {
+              return {
+                title: ch.title || ('第' + (i + 1) + '章'),
+                lines: null, _loaded: false,
+                _loader: (function(ch2) {
+                  return async function() {
+                    const r = await window.stealth.novelContent(book, ch2);
+                    return r.ok ? r.content : ('（加载失败: ' + (r.error || '未知错误') + '）');
+                  };
+                })(ch)
+              };
+            })
+          };
+        } else {
+          novel = {
+            _bookKey: bookKey,
+            title: currentBook.name || '在线小说',
+            chapters: currentChapters.map(function(c, i) {
+              return { title: c.title || ('第' + (i + 1) + '章'), lines: c.lines || null, _loaded: !!c.lines, _url: c.url || c._url };
+            })
+          };
+        }
+      }
+      idx = Math.max(0, Math.min(novel.chapters.length - 1, Number(idx) || 0));
+      await loadOnlineChapter(idx);
+      showChap(idx, 0);
+    }
+
+    // 记录当前阅读的书（章节切换时更新 last-book-info + 小说历史）
+    let lastNoteKey = '';
+    function noteBookOpen() {
+      if (!currentBook || !currentChapters || !currentChapters.length) return;
+      const key = (currentBook.id || currentBook.name) + '#' + chap;
+      if (key === lastNoteKey) return;
+      lastNoteKey = key;
+      try {
+        // TXT 只存书信息 + 进度键（章节在本地文件里，避免把全文塞进配置）
+        const isTxt = currentBook.source === 'txt';
+        window.stealth.saveProgress('last-book-info', {
+          book: currentBook,
+          chapters: isTxt ? null : currentChapters,
+          sourceIndex: currentSourceIndex,
+          progressKey: progressKey
+        });
+        const chapTitle = currentChapters[chap] && currentChapters[chap].title ? currentChapters[chap].title : '';
+        const el = $('novel');
+        const max = Math.max(1, el.scrollHeight - el.clientHeight);
+        addToNovelHistory(currentBook, currentChapters, chap, chapTitle, el.scrollTop / max);
+      } catch (e) {}
+    }
+
+    // 保存会话状态（模式/本地视频/分屏/行距）到主进程
+    function saveUiState() {
+      try {
+        window.stealth.saveUiState({
+          lastMode: mode,
+          lastVideoPath: lastVideoPath,
+          splitState: { active: splitMode, ratio: splitRatio, reversed: splitReversed },
+          lineHeight: lineHeight
+        });
+      } catch (e) {}
+    }
+
+    // 阅读进度防抖保存（滚动时高频触发，只做一次 IPC + 主进程防抖写盘）
+    let progTimer = null;
     function saveProg() {
       if (!novel || !progressKey) return;
       const el = $('novel');
       const max = Math.max(1, el.scrollHeight - el.clientHeight);
-      window.stealth.saveProgress(progressKey, { chap: chap, ratio: el.scrollTop / max, fontSize: fontSize, novelFont: novelFont });
+      const data = { chap: chap, ratio: el.scrollTop / max, fontSize: fontSize, novelFont: novelFont, lineHeight: lineHeight };
+      if (progTimer) clearTimeout(progTimer);
+      progTimer = setTimeout(function() {
+        progTimer = null;
+        try { window.stealth.saveProgress(progressKey, data); } catch (e) {}
+      }, 300);
     }
 
     function openBook(data) {
       if (!data || data.error) { if (data && data.error) alert(data.error); return; }
       novel = data;
       progressKey = data.filePath || data.title;
+      // TXT 也纳入统一书籍状态（历史记录 / 启动恢复）
+      currentBook = { id: 'txt:' + (data.filePath || data.title), name: data.title || '本地小说', filePath: data.filePath, source: 'txt' };
+      currentChapters = data.chapters || [];
+      currentSourceIndex = 0;
       setMode('book');
       $('url').value = data.title || '';
       const toc = $('toc');
@@ -1258,18 +1772,48 @@
         if (p) {
           fontSize = p.fontSize || fontSize;
           novelFont = p.novelFont || novelFont;
+          lineHeight = Number(p.lineHeight) || lineHeight;
           showChap(p.chap || 0, p.ratio || 0);
         } else showChap(0, 0);
       });
+      addToNovelHistory(currentBook, currentChapters, 0, data.chapters && data.chapters[0] ? data.chapters[0].title : '', 0);
     }
 
-    function openLocalVideo(filePath) {
+    function openLocalVideo(filePath, restore) {
+      lastVideoPath = filePath || '';
       setMode('video');
-      $('url').value = filePath;
+      $('url').value = filePath || '';
+      $('playerMsg').style.display = 'none';
       $('video').src = 'file:///' + String(filePath).replace(/\\/g, '/');
       $('video').playbackRate = speed;
-      $('video').play().catch(function(){});
+      if (restore && filePath) {
+        // 恢复上次播放位置
+        window.stealth.loadProgress('video_' + filePath).then(function(p) {
+          if (p && p.time) { try { $('video').currentTime = p.time; } catch (e) {} }
+          $('video').play().catch(function(){});
+        });
+      } else {
+        $('video').play().catch(function(){});
+      }
+      saveUiState();
     }
+    // 本地视频播放位置自动保存（每3秒）
+    let videoSaveTimer = null;
+    $('video').addEventListener('timeupdate', function() {
+      if (videoSaveTimer) return;
+      videoSaveTimer = setTimeout(function() {
+        videoSaveTimer = null;
+        try {
+          if (lastVideoPath && $('video').currentTime > 0) {
+            window.stealth.saveProgress('video_' + lastVideoPath, { time: $('video').currentTime });
+          }
+        } catch (e) {}
+      }, 3000);
+    });
+    $('video').addEventListener('error', function() {
+      $('playerMsg').style.display = 'flex';
+      $('playerMsg').textContent = '视频无法播放：文件可能已被移动或删除';
+    });
 
     let chromeOff = false;
     let chromeHoverTimer = null;
@@ -1353,7 +1897,7 @@
       document.getElementById('app').classList.toggle('chrome-off', chromeOff);
       if (chromeHoverTimer) { clearTimeout(chromeHoverTimer); chromeHoverTimer = null; }
     }
-    function toggleToc() { if (mode === 'book') $('toc').classList.toggle('hidden'); }
+    function toggleToc() { if (mode === 'book' || splitMode) $('toc').classList.toggle('hidden'); }
     function showHelp(v) { $('helpModal').classList.toggle('show', !!v); }
 
     function showSet(v) {
@@ -1365,6 +1909,7 @@
         $('hkHelp').value = hotkeys.help || '';
         $('customTitle').value = document.title || '小窗';
         $('novelFont').value = novelFont;
+        $('novelLineHeight').value = String(lineHeight);
         $('customSites').value = sitesToText(customSites);
         $('customSearchSources').value = JSON.stringify(customSearchSources, null, 2);
         $('tb_quickSite').checked = !!toolbarCfg.quickSite;
@@ -1378,8 +1923,8 @@
         $('bossTransparent').checked = !!bossTransparent;
         $('bossOpacity').value = String(Math.round(bossOpacity * 100));
         $('bossOpacityVal').textContent = Math.round(bossOpacity * 100) + '%';
-        $('floatBall').checked = !!floatBall;
         $('mediaControls').checked = !!mediaControls;
+        $('pauseOnBlur').checked = !!pauseOnBlur;
         applyBackground();
       }
       $('setModal').classList.toggle('show', !!v);
@@ -1422,7 +1967,7 @@
       });
       // 默认折叠不常用的 section（用 index 匹配，不用文本匹配，更可靠）
       // 顺序：0背景图片 1快速搜索源 2顶栏按钮 3热键 4外观 5快捷网站 6小说搜索源 7其他
-      const collapsedIndexes = [3, 5, 6, 7]; // 热键、快捷网站、小说搜索源、其他
+      const collapsedIndexes = [0, 1, 2, 3, 4, 5, 6, 7]; // 默认全部收起
       titles.forEach(function(t, i) {
         if (collapsedIndexes.indexOf(i) >= 0) {
           t.classList.add('collapsed');
@@ -1448,11 +1993,10 @@
           quickSources = [...DEFAULT_QUICK_SOURCES];
           saveQuickSources();
           renderQuickSourceList();
-          renderQuickSearchSources();
           break;
         case 'toolbar':
           toolbarCfg = { quickSite: true, speed: true, mute: false, volume: false, opacity: true, help: false };
-          window.stealth.saveExtras({ toolbar: toolbarCfg });
+          window.stealth.saveToolbar(toolbarCfg);
           applyToolbar();
           $('tb_quickSite').checked = !!toolbarCfg.quickSite;
           $('tb_speed').checked = !!toolbarCfg.speed;
@@ -1462,7 +2006,7 @@
           break;
         case 'hotkey':
           hotkeys = { hide: 'Alt+H', chrome: 'F12', pin: 'Control+T', toc: 'F8', help: 'F1' };
-          window.stealth.saveExtras({ hotkeys: hotkeys });
+          window.stealth.saveHotkeys(hotkeys);
           $('hkHide').value = hotkeys.hide;
           $('hkChrome').value = hotkeys.chrome;
           $('hkPin').value = hotkeys.pin;
@@ -1471,15 +2015,22 @@
           break;
         case 'appearance':
           novelFont = 'Microsoft YaHei';
+          lineHeight = 1.9;
           document.title = '小窗';
-          window.stealth.saveExtras({ novelFont: novelFont, customTitle: '小窗' });
+          window.stealth.saveCustom({ novelFont: novelFont, customTitle: '小窗' });
+          saveUiState();
           $('novelFont').value = novelFont;
+          $('novelLineHeight').value = String(lineHeight);
           $('customTitle').value = '小窗';
-          if (mode === 'book') $('novel').style.fontFamily = novelFont;
+          if (mode === 'book') {
+            $('novel').style.fontFamily = novelFont;
+            $('novel').style.lineHeight = lineHeight;
+          }
           break;
         case 'sites':
-          customSites = null; // 用默认
-          window.stealth.saveExtras({ customSites: [] });
+          customSites = [];
+          window.stealth.saveCustom({ customSites: [] });
+          refreshQuickSite();
           $('customSites').value = '';
           break;
         case 'searchSource':
@@ -1489,25 +2040,127 @@
           break;
         case 'other':
           bossTransparent = false;
-          floatBall = false;
           mediaControls = false;
+          pauseOnBlur = true;
           hideScrollbar = true;
           darkMode = false;
           autoRefresh = 0;
           showTaskbar = false;
           window.stealth.saveExtras({
-            bossTransparent: bossTransparent, floatBall: floatBall, mediaControls: mediaControls,
-            hideScrollbar: hideScrollbar, darkMode: darkMode, autoRefresh: autoRefresh, showTaskbar: showTaskbar
+            bossTransparent: bossTransparent, mediaControls: mediaControls,
+            pauseOnBlur: pauseOnBlur, hideScrollbar: hideScrollbar, darkMode: darkMode,
+            autoRefresh: autoRefresh, showTaskbar: showTaskbar
           });
           $('bossTransparent').checked = bossTransparent;
-          $('floatBall').checked = floatBall;
           $('mediaControls').checked = mediaControls;
+          $('pauseOnBlur').checked = pauseOnBlur;
           $('hideScrollbar').checked = hideScrollbar;
           $('darkMode').checked = darkMode;
           $('autoRefresh').value = '0';
           $('showTaskbar').checked = showTaskbar;
           break;
       }
+    }
+
+    // 关闭「更多」菜单
+    function closeMore() {
+      $('moreMenu').classList.remove('show');
+    }
+
+    // 启动时恢复上次会话（网页/小说/视频/分屏）
+    function restoreSession(state) {
+      const wantSplit = !!(state.splitState && state.splitState.active);
+      if (wantSplit) {
+        // 分屏：左侧恢复上次网页，右侧交给 autoRestoreLastBook 恢复小说
+        splitMode = true;
+        enterSplitUI();
+        const u = state.url;
+        if (u && u.indexOf('welcome.html') < 0) {
+          setMode('web'); view.src = u; $('url').value = u;
+        } else {
+          setMode('web'); goHome();
+        }
+      } else if (lastMode === 'video' && state.lastVideoPath) {
+        // 本地视频：恢复播放位置
+        openLocalVideo(state.lastVideoPath, true);
+      } else if (lastMode === 'book') {
+        // 上次是小说模式：先显示空阅读器占位，由 autoRestoreLastBook 恢复内容
+        setMode('book');
+        $('url').value = '';
+      } else if (state.url && state.url.indexOf('welcome.html') < 0) {
+        // 网页：恢复上次页面
+        setMode('web'); view.src = state.url; $('url').value = state.url;
+        window.stealth.saveUrl(state.url);
+      } else {
+        setMode('web'); goHome();
+      }
+      // 注意：这里不主动 saveUiState，避免把 lastMode 覆盖成 web
+      // （上次是小说模式时，由 autoRestoreLastBook 随后切回 book 并保存）
+    }
+
+    // 刷新快速搜索源下拉（若页面有该下拉）
+    function renderQuickSearchSources() {
+      const sel = $('quickSearchSource');
+      if (!sel) return;
+      sel.innerHTML = quickSources.map(function(s, i) {
+        return '<option value="' + i + '">' + s.name + '</option>';
+      }).join('');
+    }
+
+    function renderQuickSourceList() {
+      const list = $('quickSourceList');
+      if (!list) return;
+      list.innerHTML = quickSources.map(function(s, i) {
+        return '<div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,0.05);">' +
+          '<span style="flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + s.url + '">' +
+          s.name + ' <span style="color:#999;">' + s.url.substring(0, 30) + '...</span>' +
+          '</span>' +
+          '<button data-idx="' + i + '" class="delQuickSource" style="padding:2px 6px;font-size:10px;color:#e53e3e;border:1px solid rgba(229,62,62,0.3);background:transparent;border-radius:4px;cursor:pointer;">删</button>' +
+          '</div>';
+      }).join('');
+      document.querySelectorAll('.delQuickSource').forEach(function(btn) {
+        btn.onclick = function() {
+          const idx = Number(this.getAttribute('data-idx'));
+          quickSources.splice(idx, 1);
+          saveQuickSources();
+          renderQuickSourceList();
+          if (typeof renderQuickSearchSources === 'function') renderQuickSearchSources();
+        };
+      });
+    }
+
+    function saveQuickSources() {
+      const custom = quickSources.slice(DEFAULT_QUICK_SOURCES.length);
+      window.stealth.saveExtras({ customQuickSources: custom });
+    }
+
+    function bindQuickSourceUI() {
+      const add = $('addQuickSource');
+      if (add) add.onclick = function() {
+        const name = $('newSourceName').value.trim();
+        const url = $('newSourceUrl').value.trim();
+        if (!name || !url) { alert('请填写名称和URL'); return; }
+        if (url.indexOf('{k}') < 0) { alert('URL 必须包含 {k} 占位符'); return; }
+        quickSources.push({ name: name, url: url });
+        saveQuickSources();
+        renderQuickSourceList();
+        if (typeof renderQuickSearchSources === 'function') renderQuickSearchSources();
+        $('newSourceName').value = '';
+        $('newSourceUrl').value = '';
+      };
+      const reset = $('resetQuickSources');
+      if (reset) reset.onclick = function() {
+        if (!confirm('确定恢复默认搜索源？自定义源会被删除')) return;
+        quickSources = [...DEFAULT_QUICK_SOURCES];
+        saveQuickSources();
+        renderQuickSourceList();
+        if (typeof renderQuickSearchSources === 'function') renderQuickSearchSources();
+      };
+      const pob = $('pauseOnBlur');
+      if (pob) pob.onchange = function() {
+        pauseOnBlur = $('pauseOnBlur').checked;
+        window.stealth.saveExtras({ pauseOnBlur: pauseOnBlur });
+      };
     }
 
     async function init() {
@@ -1525,14 +2178,23 @@
       hideScrollbar = state.hideScrollbar !== false;
       darkMode = !!state.darkMode;
       autoRefresh = Number(state.autoRefresh) || 0;
-      bossTransparent = state.bossTransparent !== false;
+      bossTransparent = state.bossTransparent === true; // 失焦透明默认关闭
       bossOpacity = Number(state.bossOpacity) || 0.25;
-      floatBall = !!state.floatBall;
       mediaControls = !!state.mediaControls;
+      pauseOnBlur = !!state.pauseOnBlur;
       favorites = Array.isArray(state.favorites) ? state.favorites : [];
       history = Array.isArray(state.history) ? state.history : [];
       searchSources = state.searchSources || { novel: [] };
       customSearchSources = state.customSearchSources || [];
+      // ===== 会话/布局状态恢复 =====
+      lastMode = state.lastMode || 'web';
+      lastVideoPath = state.lastVideoPath || '';
+      lineHeight = Number(state.lineHeight) || 1.9;
+      const splitState = state.splitState || { active: false, ratio: 0.5, reversed: false };
+      splitReversed = !!splitState.reversed;
+      if (splitState.active) {
+        splitRatio = Math.max(0.15, Math.min(0.85, Number(splitState.ratio) || 0.5));
+      }
       // 合并用户自定义快速搜索源
       if (state.customQuickSources && Array.isArray(state.customQuickSources) && state.customQuickSources.length > 0) {
         quickSources = [...DEFAULT_QUICK_SOURCES, ...state.customQuickSources];
@@ -1540,6 +2202,7 @@
         quickSources = [...DEFAULT_QUICK_SOURCES];
       }
       renderQuickSourceList();
+      bindQuickSourceUI();
       // 加载在线小说书源
       window.stealth.getBookSources().then(function(sources) {
         bookSources = sources || [];
@@ -1557,8 +2220,7 @@
       // 设置 webview preload（最稳的链接拦截）
       try { view.setAttribute('preload', 'file:///' + state.webviewPreload.replace(/\\/g, '/')); } catch (e) {}
 
-      $('opacity').value = String(Math.round((state.opacity == null ? 1 : state.opacity) * 100));
-      window.stealth.setOpacity(Number($('opacity').value) / 100);
+      applyOpacityUI(Math.round((state.opacity == null ? 1 : state.opacity) * 100));
       $('pin').classList.toggle('on', !!state.alwaysOnTop);
       $('showTaskbar').checked = !!state.showTaskbar;
       $('muteBtn').innerHTML = isMuted ?
@@ -1570,8 +2232,7 @@
       refreshQuickSite();
       applyToolbar();
 
-      setMode('web');
-      goHome();
+      restoreSession(state);
 
       window.addEventListener('resize', relayoutWeb);
       new ResizeObserver(relayoutWeb).observe($('viewHost'));
@@ -1600,11 +2261,10 @@
             handleAppHotkey(e.args[0]);
           }
           if (e.channel === 'pip-alt-wheel' && e.args && e.args[0]) {
+            // Alt+滚轮调透明度（直接弹出数值提示）
             let v = Number($('opacity').value) || 100;
             v += e.args[0].deltaY > 0 ? -5 : 5;
-            v = Math.max(20, Math.min(100, v));
-            $('opacity').value = String(v);
-            window.stealth.setOpacity(v / 100);
+            applyOpacityUI(v, true);
           }
           if (e.channel === 'pip-ctrl-wheel' && e.args && e.args[0]) {
             // Ctrl+滚轮缩放网页
@@ -1662,12 +2322,12 @@
       });
       // webview 崩溃后自动恢复
       view.addEventListener('crashed', function() {
-        console.error('webview crashed, reloading...');
-        try { view.reload(); } catch(e) {}
+        console.error('webview crashed');
+        try { setMode('web'); goHome(); } catch(e) {}
       });
       view.addEventListener('render-process-gone', function(e) {
         console.error('webview render-process-gone:', e.reason);
-        try { view.reload(); } catch(err) {}
+        try { setMode('web'); goHome(); } catch(err) {}
       });
       // webview 加载失败时显示提示
       view.addEventListener('did-fail-load', function(e) {
@@ -1685,14 +2345,27 @@
       $('go').onclick = function() {
         const raw = $('url').value.trim();
         if (!raw) { goHome(); return; }
-        const u = normalizeUrl(raw);
-        setMode('web'); view.src = u; window.stealth.saveUrl(u); setTimeout(relayoutWeb, 50);
+        if (urlSearchMode === 'novel') {
+          // 小说搜索模式
+          setMode('book');
+          if (typeof doNovelSearch === 'function') doNovelSearch(raw);
+        } else {
+          // 网页搜索模式
+          const u = normalizeUrl(raw);
+          setMode('web'); view.src = u; window.stealth.saveUrl(u); setTimeout(relayoutWeb, 50);
+        }
+      };
+      $('searchModeBtn').onclick = function() {
+        urlSearchMode = urlSearchMode === 'web' ? 'novel' : 'web';
+        $('searchModeBtn').textContent = urlSearchMode === 'web' ? '网页' : '小说';
+        $('url').placeholder = urlSearchMode === 'web' ? '网址 / 搜索' : '输入小说名搜索TXT';
       };
       $('url').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); $('go').click(); } });
       $('back').onclick = function() { if (mode === 'web' && view.canGoBack()) view.goBack(); };
       $('fwd').onclick = function() { if (mode === 'web' && view.canGoForward()) view.goForward(); };
       $('reload').onclick = function() { if (mode === 'web') view.reload(); };
       $('file').onclick = async function() {
+        closeMore();
         const r = await window.stealth.openMedia();
         if (!r) return;
         if (r.error) { alert(r.error); return; }
@@ -1703,6 +2376,7 @@
       $('quickSite').onchange = function() {
         const v = $('quickSite').value;
         if (v) {
+          closeMore();
           setMode('web'); view.src = v; window.stealth.saveUrl(v);
           $('url').value = v;
         }
@@ -1719,17 +2393,13 @@
         if (window.stealth.mediaPlayPause) window.stealth.mediaPlayPause();
       };
 
-      // 透明度按钮点击：展开/收起滑条
-      $('opacityBtn').onclick = function(e) {
-        e.stopPropagation();
-        $('opacityGroup').classList.toggle('open');
-      };
-      $('opacity').oninput = function() { window.stealth.setOpacity(Number($('opacity').value) / 100); };
+      // 透明度：滑块常显，点击图标无操作（避免收起滑块，数字实时显示在右侧）
+      $('opacityBtn').onclick = function(e) { e.stopPropagation(); };
+      $('opacity').oninput = function() { applyOpacityUI(Number($('opacity').value)); };
 
-      // 点击其他地方收起滑条
+      // 点击其他地方收起滑条（透明度滑块常显，不参与收起）
       document.addEventListener('click', function(e) {
         if (!$('muteGroup').contains(e.target)) $('muteGroup').classList.remove('open');
-        if (!$('opacityGroup').contains(e.target)) $('opacityGroup').classList.remove('open');
       });
 
       $('speed').onchange = function() { speed = Number($('speed').value) || 1; window.stealth.setSpeed(speed); applySpeed(); };
@@ -1742,18 +2412,94 @@
         window.stealth.setAlwaysOnTop(n);
       };
       $('splitBtn').onclick = function() { toggleSplit(); };
-      $('hide').onclick = function() { window.stealth.toggleHidden(); };
+      $('swapBtn').onclick = function() { swapSplit(); };
+      // 一键刷新小窗：通用兜底救援，不管什么模式卡住都点这个恢复
+      $('refreshApp').onclick = function() {
+        closeMore();
+        try {
+          // 关闭所有可能卡住的下拉/弹窗
+          document.querySelectorAll('.dropdown.show').forEach(function(d) { d.classList.remove('show'); });
+          document.querySelectorAll('.modal.show').forEach(function(m) { m.classList.remove('show'); });
+
+          // 1. 重新套用分屏布局（若开着分屏）
+          if (splitMode) {
+            const container = $('splitContainer');
+            container.classList.remove('reverse');
+            if (splitReversed) container.classList.add('reverse');
+            applySplitRatio();
+          } else {
+            // 非分屏：按当前模式重置各面板显隐，纠正错乱状态
+            setMode(mode);
+          }
+
+          // 2. 恢复窗口外观（背景、透明度、媒体控制栏）
+          try { applyBackground(); } catch (e) {}
+          try { applyMediaControls(); } catch (e) {}
+
+          // 3. 按模式各自刷新内容
+          if (mode === 'web' || splitMode) {
+            try { view.reload(); } catch (e) {}
+            setTimeout(function() {
+              try { applyExtras(); } catch (e) {}
+              try { applySpeed(); } catch (e) {}
+              try { restoreZoom(); } catch (e) {}
+            }, 300);
+          }
+          if (mode === 'book' || splitMode) {
+            // 小说模式：重绘当前章节并保留阅读位置（novel 存在时）
+            try {
+              if (novel && novel.chapters && novel.chapters.length) {
+                const box = $('novel');
+                const max = Math.max(1, box.scrollHeight - box.clientHeight);
+                const keepRatio = box.scrollTop / max;
+                showChap(chap, keepRatio);
+              }
+            } catch (e) {}
+          }
+          if (mode === 'video') {
+            // 视频模式：重载 video 元素，避免黑屏卡住
+            try { const v = $('video'); if (v) { const t = v.currentTime; v.load(); v.currentTime = t || 0; } } catch (e) {}
+          }
+
+          // 4. 强制多次 relayout（应对布局计算延迟，这是分屏卡空白的关键兜底）
+          relayoutWeb();
+          setTimeout(relayoutWeb, 60);
+          setTimeout(relayoutWeb, 200);
+          setTimeout(relayoutWeb, 500);
+        } catch (e) { console.log('刷新小窗失败:', e); }
+      };
+      $('hide').onclick = function() { closeMore(); window.stealth.toggleHidden(); };
       $('close').onclick = function() { window.stealth.close(); };
-      $('helpBtn').onclick = function() { showHelp(true); };
+      $('minBtn').onclick = function() { window.stealth.minimize(); };
+      $('helpBtn').onclick = function() { closeMore(); showHelp(true); };
       $('helpClose').onclick = function() { showHelp(false); };
       $('helpModal').onclick = function(e) { if (e.target === $('helpModal')) showHelp(false); };
-      $('setBtn').onclick = function() { showSet(true); };
+      $('setBtn').onclick = function() { closeMore(); showSet(true); };
       $('setClose').onclick = function() { showSet(false); };
       setupHotkeyRecorder();
+
+      // 「更多」菜单
+      $('moreBtn').onclick = function(e) {
+        e.stopPropagation();
+        const show = !$('moreMenu').classList.contains('show');
+        $('favDropdown').classList.remove('show');
+        $('histDropdown').classList.remove('show');
+        $('searchPanel').classList.remove('show');
+        $('moreMenu').classList.toggle('show', show);
+      };
+      // 更多菜单：整行可点击触发（点行内任意位置等效点该行按钮）
+      $('moreMenu').querySelectorAll('.mm-row').forEach(function(row) {
+        row.addEventListener('click', function(e) {
+          if (e.target.closest('button') || e.target.closest('select') || e.target.closest('input')) return;
+          const btn = row.querySelector('button');
+          if (btn && !btn.classList.contains('hidden')) btn.click();
+        });
+      });
 
       // 收藏夹
       $('favBtn').onclick = function(e) {
         e.stopPropagation();
+        closeMore();
         const show = !$('favDropdown').classList.contains('show');
         $('histDropdown').classList.remove('show');
         $('favDropdown').classList.toggle('show', show);
@@ -1766,6 +2512,7 @@
       // 历史记录
       $('histBtn').onclick = function(e) {
         e.stopPropagation();
+        closeMore();
         const show = !$('histDropdown').classList.contains('show');
         $('favDropdown').classList.remove('show');
         $('histDropdown').classList.toggle('show', show);
@@ -1787,11 +2534,15 @@
         if (!e.target.closest('#searchPanel') && !e.target.closest('#searchBtn')) {
           $('searchPanel').classList.remove('show');
         }
+        if (!e.target.closest('#moreMenu') && !e.target.closest('#moreBtn')) {
+          $('moreMenu').classList.remove('show');
+        }
       });
 
       // 在线小说搜索
       $('searchBtn').onclick = function(e) {
         e.stopPropagation();
+        closeMore();
         const show = !$('searchPanel').classList.contains('show');
         $('favDropdown').classList.remove('show');
         $('histDropdown').classList.remove('show');
@@ -1804,130 +2555,9 @@
           $('searchBack').style.display = 'none';
         } else if ($('searchResults').style.display !== 'none') {
           $('searchResults').style.display = 'none';
-          $('bookSourceSearchArea').style.display = 'block';
           $('searchBack').style.display = 'none';
         }
       };
-      // 搜索模式切换
-      $('searchModeQuick').onclick = function() {
-        searchMode = 'quick';
-        $('searchModeQuick').classList.add('primary');
-        $('searchModeBookSource').classList.remove('primary');
-        $('quickSearchArea').style.display = 'block';
-        $('bookSourceSearchArea').style.display = 'none';
-        $('searchResults').style.display = 'none';
-        $('chapterList').style.display = 'none';
-        $('searchBack').style.display = 'none';
-      };
-      $('searchModeBookSource').onclick = function() {
-        searchMode = 'bookSource';
-        $('searchModeBookSource').classList.add('primary');
-        $('searchModeQuick').classList.remove('primary');
-        $('quickSearchArea').style.display = 'none';
-        $('bookSourceSearchArea').style.display = 'block';
-        $('searchResults').style.display = 'none';
-        $('chapterList').style.display = 'none';
-        $('searchBack').style.display = 'none';
-      };
-      // 渲染快速搜索源（搜索面板下拉）
-      function renderQuickSearchSources() {
-        const sel = $('quickSearchSource');
-        if (!sel) return;
-        sel.innerHTML = quickSources.map(function(s, i) {
-          return '<option value="' + i + '">' + s.name + '</option>';
-        }).join('');
-      }
-      renderQuickSearchSources();
-      // 渲染设置面板的快速搜索源列表
-      function renderQuickSourceList() {
-        const list = $('quickSourceList');
-        if (!list) return;
-        list.innerHTML = quickSources.map(function(s, i) {
-          return '<div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,0.05);">' +
-            '<span style="flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + s.url + '">' +
-            s.name + ' <span style="color:#999;">' + s.url.substring(0, 30) + '...</span>' +
-            '</span>' +
-            '<button data-idx="' + i + '" class="delQuickSource" style="padding:2px 6px;font-size:10px;color:#e53e3e;border:1px solid rgba(229,62,62,0.3);background:transparent;border-radius:4px;cursor:pointer;">删</button>' +
-            '</div>';
-        }).join('');
-        // 绑定删除按钮
-        document.querySelectorAll('.delQuickSource').forEach(function(btn) {
-          btn.onclick = function() {
-            const idx = Number(this.getAttribute('data-idx'));
-            quickSources.splice(idx, 1);
-            saveQuickSources();
-            renderQuickSourceList();
-            renderQuickSearchSources();
-          };
-        });
-      }
-      // 保存快速搜索源到配置
-      function saveQuickSources() {
-        const custom = quickSources.slice(DEFAULT_QUICK_SOURCES.length);
-        window.stealth.saveExtras({ customQuickSources: custom });
-      }
-      // 添加快速搜索源
-      $('addQuickSource').onclick = function() {
-        const name = $('newSourceName').value.trim();
-        const url = $('newSourceUrl').value.trim();
-        if (!name || !url) { alert('请填写名称和URL'); return; }
-        if (url.indexOf('{k}') < 0) { alert('URL 必须包含 {k} 占位符'); return; }
-        quickSources.push({ name: name, url: url });
-        saveQuickSources();
-        renderQuickSourceList();
-        renderQuickSearchSources();
-        $('newSourceName').value = '';
-        $('newSourceUrl').value = '';
-      };
-      // 恢复默认源
-      $('resetQuickSources').onclick = function() {
-        if (!confirm('确定恢复默认搜索源？自定义源会被删除')) return;
-        quickSources = [...DEFAULT_QUICK_SOURCES];
-        saveQuickSources();
-        renderQuickSourceList();
-        renderQuickSearchSources();
-      };
-      // 快速搜索
-      $('quickSearchBtn').onclick = function() {
-        const kw = $('quickSearchKeyword').value.trim();
-        if (!kw) return;
-        const idx = Number($('quickSearchSource').value);
-        const source = quickSources[idx];
-        if (!source) return;
-        const url = source.url.replace('{k}', encodeURIComponent(kw));
-        $('searchPanel').classList.remove('show');
-        setMode('web');
-        view.src = url;
-        $('url').value = url;
-        window.stealth.saveUrl(url);
-      };
-      $('quickSearchKeyword').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); $('quickSearchBtn').click(); }
-      });
-      $('doSearch').onclick = async function() {
-        const kw = $('searchKeyword').value.trim();
-        if (!kw) return;
-        $('doSearch').textContent = '搜索中...';
-        $('doSearch').disabled = true;
-        try {
-          const result = await window.stealth.novelSearch(kw);
-          if (result.ok && result.results && result.results.length > 0) {
-            renderUnifiedSearchResults(result.results);
-          } else {
-            $('searchResults').innerHTML = '<div style="padding:10px;text-align:center;color:#999;font-size:12px;">' + (result.error ? '搜索失败: ' + result.error : '未找到结果') + '</div>';
-            $('searchResults').style.display = 'block';
-          }
-        } catch (e) {
-          $('searchResults').innerHTML = '<div style="padding:10px;text-align:center;color:#999;font-size:12px;">搜索出错: ' + e.message + '</div>';
-          $('searchResults').style.display = 'block';
-        }
-        $('doSearch').textContent = '搜索';
-        $('doSearch').disabled = false;
-      };
-      $('searchKeyword').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); $('doSearch').click(); }
-      });
-
       // 背景图片选择
       $('selectBg').onclick = async function() {
         const r = await window.stealth.selectBackground();
@@ -2021,9 +2651,14 @@
         });
         customSites = result.customSites;
         novelFont = result.novelFont;
+        lineHeight = Number($('novelLineHeight').value) || lineHeight;
         document.title = result.customTitle;
         refreshQuickSite();
-        if (mode === 'book') $('novel').style.fontFamily = novelFont;
+        if (mode === 'book') {
+          $('novel').style.fontFamily = novelFont;
+          $('novel').style.lineHeight = lineHeight;
+        }
+        saveUiState();
         toolbarCfg = await window.stealth.saveToolbar({
           quickSite: $('tb_quickSite').checked,
           speed: $('tb_speed').checked,
@@ -2039,20 +2674,19 @@
           autoRefresh: Number($('autoRefresh').value),
           bossTransparent: $('bossTransparent').checked,
           bossOpacity: Number($('bossOpacity').value) / 100,
-          floatBall: $('floatBall').checked,
-          mediaControls: $('mediaControls').checked
+          mediaControls: $('mediaControls').checked,
+          pauseOnBlur: $('pauseOnBlur').checked
         });
         hideScrollbar = extras.hideScrollbar;
         darkMode = extras.darkMode;
         autoRefresh = extras.autoRefresh;
         bossTransparent = extras.bossTransparent;
         bossOpacity = extras.bossOpacity;
-        floatBall = extras.floatBall;
         mediaControls = extras.mediaControls;
+        pauseOnBlur = extras.pauseOnBlur;
         applyExtras();
         restartAutoRefresh();
-        // 应用浮动球和媒体控制栏
-        if (window.stealth.setFloatBall) window.stealth.setFloatBall(floatBall);
+        // 应用媒体控制栏
         applyMediaControls();
         // 保存自定义搜索源
         try {
@@ -2070,7 +2704,7 @@
         showSet(false);
       };
 
-      $('novel').addEventListener('scroll', saveProg);
+      $('novel').addEventListener('scroll', function() { saveProg(); });
       $('novel').addEventListener('click', function(e) {
         if (window.getSelection && String(window.getSelection())) return;
         const rect = $('novel').getBoundingClientRect();
@@ -2080,15 +2714,109 @@
         else if (x > rect.width * 2 / 3) $('novel').scrollBy({ top: step, behavior: 'smooth' });
       });
 
+      // 分屏区域点击激活
+      $('viewHost').addEventListener('mousedown', function() { if (splitMode) setActivePanel('left'); });
+      $('reader').addEventListener('mousedown', function() { if (splitMode) setActivePanel('right'); });
+
+      // 小说目录快捷键提示（在小说模式下显示小字）
+      function updateTocHint() {
+        const hintEl = $('tocHint');
+        if (!hintEl) return;
+        if (mode === 'book' && hotkeys && hotkeys.toc) {
+          hintEl.textContent = '按 ' + hotkeys.toc + ' 切换目录';
+          hintEl.style.display = '';
+        } else {
+          hintEl.style.display = 'none';
+        }
+      }
+      // 创建目录提示元素
+      if (!$('tocHint')) {
+        const hint = document.createElement('div');
+        hint.id = 'tocHint';
+        hint.style.cssText = 'position:absolute;bottom:4px;right:8px;font-size:10px;color:#999;opacity:0.6;pointer-events:none;z-index:10;';
+        $('reader').style.position = 'relative';
+        $('reader').appendChild(hint);
+      }
+
+      // 启动时自动恢复上次的小说阅读（在线小说 + TXT）
+      async function autoRestoreLastBook() {
+        try {
+          const lastBook = await window.stealth.loadProgress('last-book-info');
+          if (!lastBook || !lastBook.book) return;
+          // TXT：重新读文件恢复
+          if (lastBook.book.source === 'txt') {
+            const data = await window.stealth.openTxtPath(lastBook.book.filePath);
+            if (data && !data.error) {
+              openBook(data); // openBook 内部会按 progressKey 恢复章节和位置
+              if (lastMode === 'book' && !splitMode) setMode('book');
+            }
+            return;
+          }
+          if (lastBook.book && lastBook.chapters && lastBook.chapters.length > 0) {
+            // 恢复书籍信息
+            currentBook = lastBook.book;
+            currentChapters = lastBook.chapters;
+            currentSourceIndex = lastBook.sourceIndex || 0;
+            progressKey = lastBook.progressKey || ('novel_' + (currentBook.id || currentBook.name));
+            // 渲染目录
+            renderToc(currentChapters, currentBook);
+            // 恢复阅读进度
+            const prog = await window.stealth.loadProgress(progressKey);
+            if (prog && prog.chap != null) {
+              chap = prog.chap;
+              fontSize = prog.fontSize || fontSize;
+              novelFont = prog.novelFont || novelFont;
+              lineHeight = Number(prog.lineHeight) || lineHeight;
+              $('novel').style.fontSize = fontSize + 'px';
+              if (novelFont) $('novel').style.fontFamily = novelFont;
+              $('novel').style.lineHeight = lineHeight;
+              await loadChapter(chap, false);
+              // 恢复滚动位置
+              setTimeout(function() {
+                const el = $('novel');
+                const max = Math.max(1, el.scrollHeight - el.clientHeight);
+                el.scrollTop = (prog.ratio || 0) * max;
+              }, 100);
+            }
+            // 上次是纯小说模式（且不在分屏）→ 切到阅读界面；分屏时保持左网页右小说
+            if (lastMode === 'book' && !splitMode) {
+              setMode('book');
+            }
+          }
+        } catch (e) { console.log('自动恢复小说失败:', e); }
+      }
+      // 延迟自动恢复，避免启动时冲突
+      setTimeout(autoRestoreLastBook, 800);
+
+      // 加载小说历史记录
+      (async function() {
+        try {
+          const saved = await window.stealth.loadProgress('novel-history');
+          if (saved && Array.isArray(saved)) novelHistory = saved;
+        } catch (e) {}
+      })();
+
+      // 书籍阅读状态（last-book-info / 小说历史）统一在 showChap → noteBookOpen 中记录
+
       window.stealth.onGlobalHotkey(function(name) {
         if (name === 'chrome') toggleChrome();
         if (name === 'pin') $('pin').click();
         if (name === 'toc') toggleToc();
         if (name === 'help') showHelp(true);
       });
-      // 老板键：窗口隐藏时暂停所有视频 + 静音
+      // 老板键/失焦：统一走同一套暂停逻辑，恢复时按状态回放
       window.stealth.onHiddenChanged(function(hidden) {
+        if (!pauseOnBlur) return;
         if (hidden) pauseAllMedia();
+        else resumeAllMedia();
+      });
+      window.stealth.onWindowBlur(function() {
+        if (!pauseOnBlur) return;
+        pauseAllMedia();
+      });
+      window.stealth.onWindowFocus(function() {
+        if (!pauseOnBlur) return;
+        resumeAllMedia();
       });
 
       document.addEventListener('keydown', function(e) {
@@ -2111,9 +2839,7 @@
           e.preventDefault();
           let v = Number($('opacity').value) || 100;
           v += (e.key === '-' ? -5 : 5);
-          v = Math.max(20, Math.min(100, v));
-          $('opacity').value = String(v);
-          window.stealth.setOpacity(v / 100);
+          applyOpacityUI(v, true);
           return;
         }
         // Ctrl+M 静音
@@ -2132,18 +2858,22 @@
         if (!e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'PageUp')) {
           e.preventDefault(); $('novel').scrollBy({ top: -step, behavior: 'smooth' });
         }
-      });
+      }, true);
 
-      // Ctrl+滚轮：webview 缩放
+      // Ctrl+滚轮：webview 缩放 / 小说字体缩放（分屏时左右独立）
       document.addEventListener('wheel', function(e) {
         if (e.ctrlKey) {
           e.preventDefault(); e.stopPropagation();
-          if (mode === 'web') {
+          // 判断鼠标是否在右侧小说区域（分屏模式）
+          const readerEl = $('reader');
+          const isInReader = splitMode && readerEl && !readerEl.classList.contains('hidden') &&
+            e.target && (e.target.closest('#reader') || e.target.id === 'reader');
+          if (mode === 'web' && !isInReader) {
             pageZoom += e.deltaY > 0 ? -0.1 : 0.1;
-            pageZoom = Math.max(0.5, Math.min(3, Math.round(pageZoom * 10) / 10));
+            pageZoom = Math.max(0.3, Math.min(3, Math.round(pageZoom * 10) / 10));
             try { view.setZoomFactor(pageZoom); } catch (err) {}
             window.stealth.setZoom(pageZoom);
-          } else if (mode === 'book') {
+          } else if (mode === 'book' || isInReader) {
             fontSize = Math.max(12, Math.min(40, fontSize + (e.deltaY > 0 ? -1 : 1)));
             $('novel').style.fontSize = fontSize + 'px';
             saveProg();
@@ -2154,13 +2884,16 @@
           e.preventDefault();
           let v = Number($('opacity').value) || 100;
           v += e.deltaY > 0 ? -5 : 5;
-          v = Math.max(20, Math.min(100, v));
-          $('opacity').value = String(v);
-          window.stealth.setOpacity(v / 100);
+          applyOpacityUI(v, true);
         }
       }, { passive: false });
 
       $('dragStrip').addEventListener('dblclick', toggleChrome);
+      // 去顶栏时的四周隐形拖动边框：双击顶部边框恢复顶栏
+      ['edgeTop', 'edgeLeft', 'edgeRight', 'edgeBottom'].forEach(function(id) {
+        const el = $(id);
+        if (el) el.addEventListener('dblclick', toggleChrome);
+      });
       // 隐藏顶栏模式下，鼠标移到顶部滑出顶栏
       $('dragStrip').addEventListener('mouseenter', function() {
         if (chromeOff) {
@@ -2202,3 +2935,4 @@
   </script>
 </body>
 </html>
+      

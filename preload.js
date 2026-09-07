@@ -17,7 +17,9 @@ contextBridge.exposeInMainWorld('stealth', {
   selectBackground: () => ipcRenderer.invoke('select-background'),
   clearBackground: () => ipcRenderer.invoke('clear-background'),
   saveExtras: (extras) => ipcRenderer.invoke('save-extras', extras),
+  saveUiState: (s) => ipcRenderer.invoke('save-ui-state', s),
   close: () => ipcRenderer.send('window-close'),
+  minimize: () => ipcRenderer.send('window-minimize'),
   openMedia: () => ipcRenderer.invoke('open-media'),
   dropTxt: (p) => ipcRenderer.invoke('drop-txt', p),
   filePath: (file) => {
@@ -26,6 +28,7 @@ contextBridge.exposeInMainWorld('stealth', {
   },
   loadProgress: (key) => ipcRenderer.invoke('load-progress', key),
   saveProgress: (key, data) => ipcRenderer.send('save-progress', key, data),
+  openTxtPath: (filePath) => ipcRenderer.invoke('open-txt-path', filePath),
   saveHotkeys: (hk) => ipcRenderer.invoke('save-hotkeys', hk),
   addFavorite: (fav) => ipcRenderer.invoke('add-favorite', fav),
   removeFavorite: (url) => ipcRenderer.invoke('remove-favorite', url),
@@ -42,10 +45,10 @@ contextBridge.exposeInMainWorld('stealth', {
   novelChapters: (book) => ipcRenderer.invoke('novel-chapters', book),
   novelContent: (book, chapter) => ipcRenderer.invoke('novel-content', book, chapter),
   novelExport: (book, chapters) => ipcRenderer.invoke('novel-export', book, chapters),
-  floatBallClick: () => ipcRenderer.send('float-ball-click'),
-  setFloatBall: (enabled) => ipcRenderer.invoke('set-float-ball', enabled),
   mediaPlayPause: () => ipcRenderer.invoke('media-play-pause'),
   onGlobalHotkey: (cb) => { ipcRenderer.on('hotkey', (_e, name) => cb(name)); },
   onWebviewOpenUrl: (cb) => { ipcRenderer.on('webview-open-url', (_e, url) => cb(url)); },
-  onHiddenChanged: (cb) => { ipcRenderer.on('hidden-changed', (_e, hidden) => cb(hidden)); }
+  onHiddenChanged: (cb) => { ipcRenderer.on('hidden-changed', (_e, hidden) => cb(hidden)); },
+  onWindowBlur: (cb) => { ipcRenderer.on('window-blur', () => cb()); },
+  onWindowFocus: (cb) => { ipcRenderer.on('window-focus', () => cb()); }
 });
