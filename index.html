@@ -364,6 +364,13 @@
       <div class="mm-row"><button id="pin" class="icon on" title="窗口始终浮在最前">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
       </button><span>窗口置顶</span></div>
+      <div class="mm-row"><button id="pickTargetWindow" class="icon" title="点击后再点击桌面上的目标窗口">◎</button><span id="targetWindowName">选择其他窗口透明度</span></div>
+      <div class="mm-row" id="targetOpacityRow" style="display:none;align-items:center;">
+        <span style="min-width:46px;">目标透明</span>
+        <input id="targetOpacity" type="range" min="5" max="100" value="100" style="flex:1;accent-color:#4299e1;" />
+        <span id="targetOpacityVal" class="mm-val">100%</span>
+      </div>
+      <div class="mm-row" id="resetTargetOpacityRow" style="display:none;"><button id="resetTargetOpacity" class="icon">↺</button><span>恢复目标不透明</span></div>
       <div class="mm-row"><button id="hide" class="icon" title="一键藏起来">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
       </button><span>一键隐身</span></div>
@@ -421,12 +428,6 @@
           <input id="opacity" type="range" min="5" max="100" value="100" />
           <span id="opacityVal" class="mm-val">100%</span>
         </div>
-      </div>
-      <div class="mm-row" style="align-items:center;">
-        <span style="min-width:46px;">网页透明</span>
-        <input id="pageOpacity" type="range" min="5" max="100" value="100" title="Ctrl+滚轮调节网页透明度" style="flex:1;accent-color:#4299e1;" />
-        <input id="pageOpacityInput" type="number" min="5" max="100" value="100" style="width:48px;height:24px;padding:0 4px;border:1px solid rgba(0,0,0,0.12);border-radius:5px;font-size:11px;" />
-        <span style="font-size:11px;color:#666;">%</span>
       </div>
     </div>
     <div id="main">
@@ -696,8 +697,8 @@
     let fontSize = 17;
     let novelFont = 'Microsoft YaHei';
     let speed = 1;
+    let targetWindow = null;
     let pageZoom = 1;
-    let pageOpacity = 1;
     let progressKey = '';
     let hotkeys = {};
     let defaults = {};
@@ -1001,20 +1002,6 @@
       }
     }
 
-    function applyPageOpacity(v, showToast) {
-      v = Number(v);
-      if (!Number.isFinite(v)) v = 100;
-      v = Math.max(5, Math.min(100, Math.round(v)));
-      pageOpacity = v / 100;
-      $('pageOpacity').value = String(v);
-      $('pageOpacityInput').value = String(v);
-      view.style.opacity = String(pageOpacity);
-      window.stealth.saveExtras({ pageOpacity: pageOpacity });
-      if (showToast) {
-        const toast = $('opacityToast');
-        if (toast) { toast.textContent = '网页透明度 ' + v + '%'; toast.style.opacity = '1'; clearTimeout(toast._pageOpacityTimer); toast._pageOpacityTimer = setTimeout(function() { toast.style.opacity = '0'; }, 1200); }
-      }
-    }
 
     function normalizeUrl(raw) {
       const s = String(raw || '').trim();
@@ -2260,7 +2247,6 @@
       try { view.setAttribute('preload', 'file:///' + state.webviewPreload.replace(/\\/g, '/')); } catch (e) {}
 
       applyOpacityUI(Math.round((state.opacity == null ? 1 : state.opacity) * 100));
-      applyPageOpacity(Math.round((state.pageOpacity == null ? 1 : state.pageOpacity) * 100));
       $('pin').classList.toggle('on', !!state.alwaysOnTop);
       $('showTaskbar').checked = !!state.showTaskbar;
       $('muteBtn').innerHTML = isMuted ?
@@ -2306,9 +2292,6 @@
             v += e.args[0].deltaY > 0 ? -5 : 5;
             applyOpacityUI(v, true);
           }
-          if (e.channel === 'pip-ctrl-wheel' && e.args && e.args[0]) {
-            applyPageOpacity(Number($('pageOpacity').value) + (e.args[0].deltaY > 0 ? -5 : 5), true);
-          }
         } catch (err) {}
       });
 
@@ -2316,7 +2299,7 @@
         if (mode === 'web' && e.url && e.url.indexOf('welcome.html') < 0) {
           $('url').value = e.url; window.stealth.saveUrl(e.url);
         }
-        adCss(); applySpeed(); restoreZoom(); applyExtras(); applyPageOpacity(pageOpacity * 100); relayoutWeb();
+        adCss(); applySpeed(); restoreZoom(); applyExtras(); relayoutWeb();
       });
       view.addEventListener('did-navigate-in-page', function(e) {
         if (mode === 'web' && e.url && e.url.indexOf('welcome.html') < 0) {
@@ -2324,7 +2307,7 @@
         }
       });
       view.addEventListener('did-finish-load', function() {
-        adCss(); applySpeed(); restoreZoom(); applyExtras(); applyPageOpacity(pageOpacity * 100); relayoutWeb();
+        adCss(); applySpeed(); restoreZoom(); applyExtras(); relayoutWeb();
         // 自动添加历史记录
         try {
           const url = view.getURL();
@@ -2428,8 +2411,30 @@
       // 透明度：滑块常显，点击图标无操作（避免收起滑块，数字实时显示在右侧）
       $('opacityBtn').onclick = function(e) { e.stopPropagation(); };
       $('opacity').oninput = function() { applyOpacityUI(Number($('opacity').value)); };
-      $('pageOpacity').oninput = function() { applyPageOpacity(Number($('pageOpacity').value)); };
-      $('pageOpacityInput').onchange = function() { applyPageOpacity(Number($('pageOpacityInput').value), true); };
+      $('pickTargetWindow').onclick = async function(e) {
+        e.stopPropagation();
+        const label = $('targetWindowName');
+        label.textContent = '请点击桌面上的目标窗口...';
+        const result = await window.stealth.pickTargetWindow();
+        if (!result || !result.ok) { label.textContent = result && result.error ? result.error : '取窗失败，请重试'; return; }
+        targetWindow = result;
+        label.textContent = '目标：' + result.title;
+        $('targetOpacityRow').style.display = 'flex';
+        $('resetTargetOpacityRow').style.display = 'flex';
+        $('targetOpacity').value = '100';
+        $('targetOpacityVal').textContent = '100%';
+      };
+      $('targetOpacity').oninput = async function() {
+        const value = Number(this.value);
+        $('targetOpacityVal').textContent = value + '%';
+        const result = await window.stealth.setTargetOpacity(value);
+        if (!result.ok) $('targetWindowName').textContent = result.error || '目标窗口已失效';
+      };
+      $('resetTargetOpacity').onclick = async function() {
+        const result = await window.stealth.resetTargetOpacity();
+        if (result.ok) { $('targetOpacity').value = '100'; $('targetOpacityVal').textContent = '100%'; }
+        else $('targetWindowName').textContent = result.error || '目标窗口已失效';
+      };
 
       // 点击其他地方收起滑条（透明度滑块常显，不参与收起）
       document.addEventListener('click', function(e) {
@@ -2902,7 +2907,10 @@
           const isInReader = splitMode && readerEl && !readerEl.classList.contains('hidden') &&
             e.target && (e.target.closest('#reader') || e.target.id === 'reader');
           if (mode === 'web' && !isInReader) {
-            applyPageOpacity(Number($('pageOpacity').value) + (e.deltaY > 0 ? -5 : 5), true);
+            pageZoom += e.deltaY > 0 ? -0.1 : 0.1;
+            pageZoom = Math.max(0.3, Math.min(3, Math.round(pageZoom * 10) / 10));
+            try { view.setZoomFactor(pageZoom); } catch (err) {}
+            window.stealth.setZoom(pageZoom);
           } else if (mode === 'web' && isInReader) {
             pageZoom += e.deltaY > 0 ? -0.1 : 0.1;
             pageZoom = Math.max(0.3, Math.min(3, Math.round(pageZoom * 10) / 10));

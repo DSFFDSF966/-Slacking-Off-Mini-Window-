@@ -12,6 +12,7 @@ const {
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { execFile } = require('child_process');
 const https = require('https');
 const http = require('http');
 const xpath = require('xpath');
@@ -447,7 +448,6 @@ const DEFAULT_CONFIG = {
   bossTransparent: false,
   bossOpacity: 0.25,
   pauseOnBlur: true,
-  pageOpacity: 1,
   favorites: [],
   history: [],
   customSearchSources: [],
@@ -468,6 +468,28 @@ let tray = null;
 let hidden = false;
 let config = { ...DEFAULT_CONFIG };
 let currentSpeed = 1;
+let targetWindow = { hwnd: 0, title: '' };
+
+function winWindowScript(mode, hwnd, alpha) {
+  const scriptPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'win-window.ps1')
+    : path.join(__dirname, 'win-window.ps1');
+  return new Promise((resolve, reject) => {
+    let ownHwnd = 0;
+    try {
+      const handle = mainWindow && mainWindow.getNativeWindowHandle();
+      ownHwnd = handle && handle.length >= 8 ? Number(handle.readBigInt64LE(0)) : (handle ? handle.readInt32LE(0) : 0);
+    } catch (_) {}
+    const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-Mode', mode,
+      '-ExcludeHwnd', String(ownHwnd),
+      '-Hwnd', String(hwnd || 0), '-Alpha', String(alpha == null ? 255 : alpha)];
+    execFile('powershell.exe', args, { windowsHide: true, timeout: 10000 }, (error, stdout) => {
+      if (error) return reject(error);
+      try { resolve(stdout.trim() ? JSON.parse(stdout.trim()) : { ok: true }); }
+      catch (_) { resolve({ ok: true }); }
+    });
+  });
+}
 
 // 遍历所有 webContents 应用倍速（包括 iframe 里的视频）
 function applySpeedToAll() {
@@ -923,7 +945,7 @@ function wireIpc() {
     bossTransparent: config.bossTransparent === true,
     bossOpacity: Number(config.bossOpacity) || 0.25,
     pauseOnBlur: !!config.pauseOnBlur,
-    pageOpacity: clampOpacity(config.pageOpacity),
+    targetWindow: targetWindow.title ? { ...targetWindow } : null,
     favorites: Array.isArray(config.favorites) ? config.favorites : [],
     history: Array.isArray(config.history) ? config.history.slice(0, 100) : [],
     searchSources: {
@@ -1246,7 +1268,6 @@ function wireIpc() {
     if (extras.bossOpacity !== undefined) config.bossOpacity = Math.min(1, Math.max(0.1, Number(extras.bossOpacity) || 0.25));
     if (extras.mediaControls !== undefined) config.mediaControls = !!extras.mediaControls;
     if (extras.pauseOnBlur !== undefined) config.pauseOnBlur = !!extras.pauseOnBlur;
-    if (extras.pageOpacity !== undefined) config.pageOpacity = clampOpacity(extras.pageOpacity);
     if (extras.customQuickSources !== undefined && Array.isArray(extras.customQuickSources)) config.customQuickSources = extras.customQuickSources;
     saveConfig();
     return {
@@ -1257,8 +1278,29 @@ function wireIpc() {
       bossOpacity: config.bossOpacity,
       mediaControls: config.mediaControls,
       pauseOnBlur: !!config.pauseOnBlur,
-      pageOpacity: clampOpacity(config.pageOpacity)
     };
+  });
+
+  ipcMain.handle('pick-target-window', async () => {
+    try {
+      // 给用户时间把鼠标移到目标窗口，再用 WindowFromPoint 取窗
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      const result = await winWindowScript('pick', 0, 255);
+      if (!result || !result.hwnd) return { ok: false, error: '没有取到目标窗口，请重试' };
+      targetWindow = { hwnd: Number(result.hwnd), title: String(result.title || '') };
+      return { ok: true, ...targetWindow };
+    } catch (e) { return { ok: false, error: e.message || '取窗失败' }; }
+  });
+  ipcMain.handle('set-target-opacity', async (_e, value) => {
+    const alpha = Math.max(13, Math.min(255, Math.round(Number(value) * 2.55)));
+    if (!targetWindow.hwnd) return { ok: false, error: '请先选择目标窗口' };
+    try { await winWindowScript('set', targetWindow.hwnd, alpha); return { ok: true, value: Math.round(alpha / 2.55) }; }
+    catch (e) { targetWindow = { hwnd: 0, title: '' }; return { ok: false, error: '目标窗口已关闭或不支持透明度' }; }
+  });
+  ipcMain.handle('reset-target-opacity', async () => {
+    if (!targetWindow.hwnd) return { ok: false, error: '请先选择目标窗口' };
+    try { await winWindowScript('reset', targetWindow.hwnd, 255); return { ok: true }; }
+    catch (e) { targetWindow = { hwnd: 0, title: '' }; return { ok: false, error: '目标窗口已关闭' }; }
   });
 
   ipcMain.on('window-close', () => setHidden(true));
