@@ -5,28 +5,6 @@ const { ipcRenderer } = require('electron');
   if (window.__pipLinkInterceptorInstalled) return;
   window.__pipLinkInterceptorInstalled = true;
 
-  // 拦截 target=_blank / 修饰键点击的链接
-  document.addEventListener('click', function (e) {
-    var a = null;
-    var el = e.target;
-    while (el && el !== document) {
-      if (el.tagName === 'A') { a = el; break; }
-      el = el.parentElement;
-    }
-    if (!a || !a.href) return;
-    var href = a.href;
-    if (!href || href.indexOf('javascript:') === 0 || href.charAt(0) === '#') return;
-    var target = (a.target || '').toLowerCase();
-    var isBlank = target === '_blank' || target === '_new' || target === '_parent' || target === '_top';
-    var modifier = e.ctrlKey || e.shiftKey || e.metaKey || e.button === 1;
-    if (isBlank || modifier) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      ipcRenderer.sendToHost('pip-open-url', href);
-    }
-  }, true);
-
   // 传出非输入框按键事件（用于应用内热键，不拦截系统打字）
   document.addEventListener('keydown', function (e) {
     var target = e.target;

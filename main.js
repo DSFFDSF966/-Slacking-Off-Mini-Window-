@@ -17,10 +17,9 @@ const http = require('http');
 const xpath = require('xpath');
 const { DOMParser } = require('@xmldom/xmldom');
 const { loadTxtNovel } = require('./txt-reader');
-const { ElectronBlocker } = require('@cliqz/adblocker-electron');
 
 app.setAppUserModelId('local.stealth.pip');
-app.disableHardwareAcceleration();
+// 使用硬件加速，视频站点的播放器和解码器在 Electron 中更稳定
 
 // ===== 全局稳定性：错误兜底，防止崩溃 =====
 process.on('uncaughtException', (err) => {
@@ -448,6 +447,7 @@ const DEFAULT_CONFIG = {
   bossTransparent: false,
   bossOpacity: 0.25,
   pauseOnBlur: true,
+  pageOpacity: 1,
   favorites: [],
   history: [],
   customSearchSources: [],
@@ -536,13 +536,8 @@ const AD_HOSTS = [
   // 百度系
   'cpro.baidu.com', 'cbjs.baidu.com', 'cm.bilibili.com', 'pos.baidu.com',
   'cpro.baidustatic.com', 'bdstatic.com', 'hm.baidu.com',
-  // 腾讯系
-  'gdt.qq.com', 'l.qq.com', 'mi.gdt.qq.com', 'adsmind.gdtimg.com',
-  'tajs.qq.com', 'pingjs.qq.com',
   // 阿里系
   'uczzd.cn', 'tanx.com', 'tbcdn.cn', 'alimama.com',
-  // 视频站广告
-  'acstatic.com',
   // 其他
   'umeng.com', 'umengcloud.com', 'cnzz.com', 'cnzz.net',
   '51.la', '51yes.com', 'ajs.com', 'segmentfault.com',
@@ -662,7 +657,6 @@ function clampOpacity(v) {
   return Math.min(1, Math.max(0.05, n));
 }
 
-let adBlocker = null;
 async function setupAdblock() {
   const ses = session.fromPartition('persist:pip');
   // 保留基础域名拦截（补充中文广告）
@@ -670,17 +664,8 @@ async function setupAdblock() {
     if (shouldBlockUrl(details.url)) { callback({ cancel: true }); return; }
     callback({});
   });
-  ses.setUserAgent(
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-  );
-  // 集成 @cliqz/adblocker-electron（Quark Player 同款，基于 EasyList）
-  try {
-    adBlocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);
-    adBlocker.enableBlockingInSession(ses);
-    console.log('[AdBlock] 已启用 EasyList 广告拦截');
-  } catch (e) {
-    console.log('[AdBlock] 加载失败，使用基础拦截:', e.message);
-  }
+  // 使用 Electron 当前 Chromium 的真实 UA，避免站点启用不匹配的播放器版本
+  // 不启用 EasyList 二次拦截，避免误伤视频站播放器请求和推荐卡片。
 }
 
 function setHidden(next) {
@@ -938,6 +923,7 @@ function wireIpc() {
     bossTransparent: config.bossTransparent === true,
     bossOpacity: Number(config.bossOpacity) || 0.25,
     pauseOnBlur: !!config.pauseOnBlur,
+    pageOpacity: clampOpacity(config.pageOpacity),
     favorites: Array.isArray(config.favorites) ? config.favorites : [],
     history: Array.isArray(config.history) ? config.history.slice(0, 100) : [],
     searchSources: {
@@ -1260,6 +1246,7 @@ function wireIpc() {
     if (extras.bossOpacity !== undefined) config.bossOpacity = Math.min(1, Math.max(0.1, Number(extras.bossOpacity) || 0.25));
     if (extras.mediaControls !== undefined) config.mediaControls = !!extras.mediaControls;
     if (extras.pauseOnBlur !== undefined) config.pauseOnBlur = !!extras.pauseOnBlur;
+    if (extras.pageOpacity !== undefined) config.pageOpacity = clampOpacity(extras.pageOpacity);
     if (extras.customQuickSources !== undefined && Array.isArray(extras.customQuickSources)) config.customQuickSources = extras.customQuickSources;
     saveConfig();
     return {
@@ -1269,7 +1256,8 @@ function wireIpc() {
       bossTransparent: config.bossTransparent,
       bossOpacity: config.bossOpacity,
       mediaControls: config.mediaControls,
-      pauseOnBlur: !!config.pauseOnBlur
+      pauseOnBlur: !!config.pauseOnBlur,
+      pageOpacity: clampOpacity(config.pageOpacity)
     };
   });
 
@@ -1358,23 +1346,6 @@ function wireIpc() {
     } catch (e) { return { error: e.message || String(e) }; }
   });
 }
-
-// 关键：主进程拦截 webview 弹窗，通过 IPC 通知渲染进程在当前 webview 打开
-// 不挑 getType()，因为 webview 的 webContents 在事件触发时类型可能还没初始化好
-app.on('web-contents-created', (event, contents) => {
-  // 跳过主窗口本身的 webContents
-  if (mainWindow && contents === mainWindow.webContents) return;
-  // 记录 webviewContents（用于静音/音量控制）
-  if (!webviewContents || webviewContents.isDestroyed()) {
-    webviewContents = contents;
-  }
-  contents.setWindowOpenHandler(({ url }) => {
-    if (mainWindow && !mainWindow.isDestroyed() && url) {
-      mainWindow.webContents.send('webview-open-url', url);
-    }
-    return { action: 'deny' };
-  });
-});
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
