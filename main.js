@@ -994,6 +994,11 @@ function wireIpc() {
     saveConfig();
     return [];
   });
+  ipcMain.handle('save-history', (_e, items) => {
+    config.history = Array.isArray(items) ? items.slice(0, 100) : [];
+    saveConfig();
+    return config.history;
+  });
 
   // 搜索源管理（开放可扩展，参考 binbyu/Reader）
   ipcMain.handle('save-search-sources', (_e, sources) => {

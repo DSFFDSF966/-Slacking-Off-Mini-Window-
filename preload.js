@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('stealth', {
   removeFavorite: (url) => ipcRenderer.invoke('remove-favorite', url),
   addHistory: (item) => ipcRenderer.invoke('add-history', item),
   clearHistory: () => ipcRenderer.invoke('clear-history'),
+  saveHistory: (items) => ipcRenderer.invoke('save-history', items),
   saveSearchSources: (sources) => ipcRenderer.invoke('save-search-sources', sources),
   importSearchSources: (json) => ipcRenderer.invoke('import-search-sources', json),
   exportSearchSources: () => ipcRenderer.invoke('export-search-sources'),
