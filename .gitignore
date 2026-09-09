@@ -60,3 +60,6 @@ dist-out/
 !build/icon.png
 !build/icon.ico
 !build/icon.jpg
+
+# WorkBuddy 会话数据
+.workbuddy/

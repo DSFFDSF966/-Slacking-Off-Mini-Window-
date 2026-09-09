@@ -12,7 +12,6 @@ const {
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { execFile } = require('child_process');
 const https = require('https');
 const http = require('http');
 const xpath = require('xpath');
@@ -20,7 +19,7 @@ const { DOMParser } = require('@xmldom/xmldom');
 const { loadTxtNovel } = require('./txt-reader');
 
 app.setAppUserModelId('local.stealth.pip');
-// 使用硬件加速，视频站点的播放器和解码器在 Electron 中更稳定
+// 硬件加速必须开启：软件渲染下视频网站（腾讯视频/B站等）播放器点击命中失效
 
 // ===== 全局稳定性：错误兜底，防止崩溃 =====
 process.on('uncaughtException', (err) => {
@@ -440,18 +439,19 @@ const DEFAULT_CONFIG = {
   customTitle: '小窗',
   customSites: DEFAULT_SITES,
   novelFont: 'Microsoft YaHei',
-  toolbar: { quickSite: true, speed: true, mute: false, volume: false, opacity: true, help: false },
+  toolbar: { quickSite: true, speed: true, mute: false, volume: false, opacity: true, winOpacity: true, help: false },
   backgroundImage: '',
   hideScrollbar: true,
   darkMode: false,
   autoRefresh: 0,
   bossTransparent: false,
   bossOpacity: 0.25,
-  pauseOnBlur: true,
   favorites: [],
   history: [],
   customSearchSources: [],
   customQuickSources: [], // 用户自定义快速搜索源
+  floatBall: false, // 桌面浮动球开关
+  floatBallPos: { x: 100, y: 100 },
   mediaControls: false, // 媒体控制栏开关
   bounds: { width: 560, height: 380 },
   hotkeys: { ...DEFAULT_HOTKEYS },
@@ -465,33 +465,12 @@ const DEFAULT_CONFIG = {
 
 let mainWindow = null;
 let tray = null;
+let floatWindow = null; // 桌面浮动球
 let hidden = false;
 let config = { ...DEFAULT_CONFIG };
 let currentSpeed = 1;
-let targetWindow = { hwnd: 0, title: '' };
 
-function winWindowScript(mode, hwnd, alpha) {
-  const scriptPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'win-window.ps1')
-    : path.join(__dirname, 'win-window.ps1');
-  return new Promise((resolve, reject) => {
-    let ownHwnd = 0;
-    try {
-      const handle = mainWindow && mainWindow.getNativeWindowHandle();
-      ownHwnd = handle && handle.length >= 8 ? Number(handle.readBigInt64LE(0)) : (handle ? handle.readInt32LE(0) : 0);
-    } catch (_) {}
-    const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-Mode', mode,
-      '-ExcludeHwnd', String(ownHwnd),
-      '-Hwnd', String(hwnd || 0), '-Alpha', String(alpha == null ? 255 : alpha)];
-    execFile('powershell.exe', args, { windowsHide: true, timeout: 10000 }, (error, stdout) => {
-      if (error) return reject(error);
-      try { resolve(stdout.trim() ? JSON.parse(stdout.trim()) : { ok: true }); }
-      catch (_) { resolve({ ok: true }); }
-    });
-  });
-}
-
-// 遍历所有 webContents 应用倍速（包括 iframe 里的视频）
+// 遍历所有 webContents 应用倍速（递归所有 iframe + Shadow DOM，腾讯视频等站的播放器在 iframe 里）
 function applySpeedToAll() {
   const { webContents } = require('electron');
   const rate = currentSpeed;
@@ -515,10 +494,26 @@ function applySpeedToAll() {
       } catch(e) {}
       return results;
     }
+    function bindGuard(v) {
+      // 站点/播放器自己改倍速时立即夺回控制权
+      if (v.__pipRateFor !== r) {
+        v.__pipRateFor = r;
+        try { v.removeEventListener('ratechange', v.__pipRateGuard); } catch(e) {}
+        v.__pipRateGuard = function() {
+          if (window.__pipSpeed !== r || v.__pipRateFor !== r) return;
+          if (Math.abs(v.playbackRate - r) > 0.01) { try { v.playbackRate = r; } catch(e) {} }
+        };
+        try { v.addEventListener('ratechange', v.__pipRateGuard, true); } catch(e) {}
+      }
+    }
     function setSpeed() {
       var medias = findMedia(document);
       medias.forEach(function(v){
-        try { if (v.playbackRate !== r) v.playbackRate = r; } catch(e) {}
+        try {
+          bindGuard(v);
+          if (v.defaultPlaybackRate !== r) v.defaultPlaybackRate = r;
+          if (v.playbackRate !== r) v.playbackRate = r;
+        } catch(e) {}
       });
     }
     setSpeed();
@@ -536,9 +531,13 @@ function applySpeedToAll() {
   })(${rate})`;
   webContents.getAllWebContents().forEach(function(wc) {
     try {
-      if (!wc.isDestroyed()) {
-        wc.executeJavaScript(js, false).catch(function(){});
-      }
+      if (wc.isDestroyed()) return;
+      // 递归注入主 frame + 所有子 frame（播放器 iframe 里的视频也能吃到倍速）
+      const walk = (frame) => {
+        try { frame.executeJavaScript(js, false).catch(function(){}); } catch (_) {}
+        try { (frame.frames || []).forEach(walk); } catch (_) {}
+      };
+      walk(wc.mainFrame);
     } catch (_) {}
   });
 }
@@ -557,12 +556,17 @@ const AD_HOSTS = [
   'connatix.com', 'seedtag.com', 'myvisualiq.net', '3lift.com',
   // 百度系
   'cpro.baidu.com', 'cbjs.baidu.com', 'cm.bilibili.com', 'pos.baidu.com',
-  'cpro.baidustatic.com', 'bdstatic.com', 'hm.baidu.com',
+  'cpro.baidustatic.com', 'hm.baidu.com',
+  // 腾讯系
+  'gdt.qq.com', 'l.qq.com', 'mi.gdt.qq.com', 'adsmind.gdtimg.com',
+  'tajs.qq.com', 'pingjs.qq.com',
   // 阿里系
-  'uczzd.cn', 'tanx.com', 'tbcdn.cn', 'alimama.com',
+  'uczzd.cn', 'tanx.com', 'alimama.com',
+  // 视频站广告
+  'acstatic.com',
   // 其他
   'umeng.com', 'umengcloud.com', 'cnzz.com', 'cnzz.net',
-  '51.la', '51yes.com', 'ajs.com', 'segmentfault.com',
+  '51.la', '51yes.com', 'ajs.com',
   'jiathis.com', 'bshare.cn', 'addthis.com', 'addthiscdn.com',
   'weboftrust.com', 'mywot.com', 'siteadvisor.com',
   'narrative.io', 'narrativeads.com', 'revcontent.com',
@@ -675,36 +679,36 @@ function flushConfig() {
 function clampOpacity(v) {
   const n = Number(v);
   if (Number.isNaN(n)) return 1;
-  // 下限 0.05：允许很透明，但不至于完全消失找不到
-  return Math.min(1, Math.max(0.05, n));
+  return Math.min(1, Math.max(0.02, n));
 }
 
-async function setupAdblock() {
-  const ses = session.fromPartition('persist:pip');
-  // 保留基础域名拦截（补充中文广告）
-  ses.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
-    if (shouldBlockUrl(details.url)) { callback({ cancel: true }); return; }
-    callback({});
-  });
-  // 使用 Electron 当前 Chromium 的真实 UA，避免站点启用不匹配的播放器版本
-  // 不启用 EasyList 二次拦截，避免误伤视频站播放器请求和推荐卡片。
-}
+  // EasyList 默认不启用：它的元素隐藏规则会误伤视频播放器覆盖层（播放按钮等），导致点击无效。
+  // 基础域名拦截（AD_HOSTS）保留，够挡大部分广告。
+  async function setupAdblock() {
+    const ses = session.fromPartition('persist:pip');
+    ses.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
+      if (shouldBlockUrl(details.url)) { callback({ cancel: true }); return; }
+      callback({});
+    });
+    ses.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    );
+  }
 
 function setHidden(next) {
   if (!mainWindow) return;
   hidden = next;
   const { webContents } = require('electron');
   if (hidden) {
-    if (config.pauseOnBlur !== false) {
-      webContents.getAllWebContents().forEach(function(wc) {
-        try { wc.setAudioMuted(true); } catch (_) {}
-        try {
-          wc.executeJavaScript(
-            `document.querySelectorAll('video,audio').forEach(function(v){try{v.pause()}catch(e){}})`, false
-          ).catch(function(){});
-        } catch (_) {}
-      });
-    }
+    // 老板键增强：遍历所有 webContents（主窗口+webview+所有iframe），全部静音+暂停
+    webContents.getAllWebContents().forEach(function(wc) {
+      try { wc.setAudioMuted(true); } catch (_) {}
+      try {
+        wc.executeJavaScript(
+          `document.querySelectorAll('video,audio').forEach(function(v){try{v.pause()}catch(e){}})`, false
+        ).catch(function(){});
+      } catch (_) {}
+    });
     mainWindow.hide();
   } else {
     mainWindow.show();
@@ -773,7 +777,7 @@ function createWindow() {
     backgroundColor: '#ffffff',
     show: false,
     title: config.customTitle || '小窗',
-    icon: path.join(__dirname, 'build', 'icon.png'),
+    icon: path.join(__dirname, 'build', 'icon.jpg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -787,7 +791,9 @@ function createWindow() {
   mainWindow.webContents.on('will-attach-webview', (_e, webPreferences, params) => {
     webPreferences.preload = path.join(__dirname, 'webview-preload.js');
     webPreferences.nodeIntegration = false;
-    webPreferences.nodeIntegrationInSubFrames = false;
+    // 子框架也注入 preload：腾讯视频等站的播放器在跨域 iframe 里，
+    // 无障碍点击/倍速/按键/滚轮必须覆盖到子 frame 才生效
+    webPreferences.nodeIntegrationInSubFrames = true;
     webPreferences.contextIsolation = true;
     webPreferences.webSecurity = true;
     if (params) {
@@ -806,15 +812,13 @@ function createWindow() {
     mainWindow.setSkipTaskbar(!config.showTaskbar);
   });
   mainWindow.on('show', () => mainWindow.setSkipTaskbar(!config.showTaskbar));
-  // 窗口失焦：通知渲染进程暂停视频/静音；防老板透明渐变（默认关闭）
+  // 防老板透明渐变：窗口失去焦点时自动变透明，获得焦点时恢复
   mainWindow.on('blur', () => {
-    try { mainWindow.webContents.send('window-blur'); } catch (e) {}
     if (config.bossTransparent && !hidden) {
       mainWindow.setOpacity(Math.min(clampOpacity(config.opacity), Number(config.bossOpacity) || 0.25));
     }
   });
   mainWindow.on('focus', () => {
-    try { mainWindow.webContents.send('window-focus'); } catch (e) {}
     if (config.bossTransparent && !hidden) {
       mainWindow.setOpacity(clampOpacity(config.opacity));
     }
@@ -840,8 +844,18 @@ function createWindow() {
   });
 }
 
+// 创建桌面浮动球
+function createFloatWindow() {
+  // 浮动球功能已移除
+}
+
+// 销毁浮动球
+function destroyFloatWindow() {
+  // 浮动球功能已移除
+}
+
 function createTray() {
-  const iconPath = path.join(__dirname, 'build', 'icon.png');
+  const iconPath = path.join(__dirname, 'build', 'icon.jpg');
   const img = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createFromDataURL(
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAAD/eMzBAAAAGUlEQVQ4T2P8z8DAwMDAwMDAwMDAwMDAAAAn+AFq4s3vAAAAAElFTkSuQmCC'
   );
@@ -942,10 +956,8 @@ function wireIpc() {
     hideScrollbar: config.hideScrollbar !== false,
     darkMode: !!config.darkMode,
     autoRefresh: Number(config.autoRefresh) || 0,
-    bossTransparent: config.bossTransparent === true,
+    bossTransparent: config.bossTransparent !== false,
     bossOpacity: Number(config.bossOpacity) || 0.25,
-    pauseOnBlur: !!config.pauseOnBlur,
-    targetWindow: targetWindow.title ? { ...targetWindow } : null,
     favorites: Array.isArray(config.favorites) ? config.favorites : [],
     history: Array.isArray(config.history) ? config.history.slice(0, 100) : [],
     searchSources: {
@@ -1001,11 +1013,6 @@ function wireIpc() {
     config.history = [];
     saveConfig();
     return [];
-  });
-  ipcMain.handle('save-history', (_e, items) => {
-    config.history = Array.isArray(items) ? items.slice(0, 100) : [];
-    saveConfig();
-    return config.history;
   });
 
   // 搜索源管理（开放可扩展，参考 binbyu/Reader）
@@ -1104,6 +1111,15 @@ function wireIpc() {
     }
   });
 
+  // 桌面浮动球开关
+  ipcMain.handle('set-float-ball', (_e, enabled) => {
+    config.floatBall = !!enabled;
+    saveConfig();
+    if (enabled) createFloatWindow();
+    else destroyFloatWindow();
+    return config.floatBall;
+  });
+
   // 媒体控制：播放/暂停
   ipcMain.handle('media-play-pause', async () => {
     const { webContents } = require('electron');
@@ -1132,6 +1148,147 @@ function wireIpc() {
     return true;
   });
 
+  // ===== 外部窗口透明度控制（Win32 SetLayeredWindowAttributes via PowerShell） =====
+  function runPs(script) {
+    return new Promise((resolve, reject) => {
+      const { spawn } = require('child_process');
+      const encoded = Buffer.from(script, 'utf16le').toString('base64');
+      const ps = spawn('powershell.exe', [
+        '-NoProfile', '-NonInteractive', '-OutputFormat', 'Text',
+        '-EncodedCommand', encoded
+      ], { windowsHide: true });
+      let out = '', err = '';
+      ps.stdout.on('data', d => { out += d.toString(); });
+      ps.stderr.on('data', d => { err += d.toString(); });
+      ps.on('close', code => {
+        if (code !== 0) reject(new Error(err || 'ps exit ' + code));
+        else resolve(out);
+      });
+      ps.on('error', reject);
+    });
+  }
+
+  // 点击选窗：最小化小窗，等用户点击桌面上任意窗口，返回其 HWND 和标题
+  ipcMain.handle('pick-window', async () => {
+    if (mainWindow) mainWindow.minimize();
+    const selfPid = process.pid;
+    const script = [
+      'Add-Type @"',
+      'using System; using System.Runtime.InteropServices; using System.Text;',
+      'public class WinPick {',
+      '  [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);',
+      '  [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);',
+      '  [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint f);',
+      '  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);',
+      '  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, System.Text.StringBuilder s, int n);',
+      '  [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int k);',
+      '  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);',
+      '  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }',
+      '}',
+      '"@',
+      '$deadline = [DateTime]::Now.AddSeconds(15)',
+      '$lastDown = $false',
+      'while ([DateTime]::Now -lt $deadline) {',
+      '  $down = ([WinPick]::GetAsyncKeyState(1) -band 0x8000) -ne 0',
+      '  if ($down -and -not $lastDown) {',
+      '    $p = New-Object WinPick+POINT',
+      '    [WinPick]::GetCursorPos([ref]$p) | Out-Null',
+      '    $h = [WinPick]::WindowFromPoint($p)',
+      '    $h = [WinPick]::GetAncestor($h, 2)',
+      '    $uid = 0',
+      '    [WinPick]::GetWindowThreadProcessId($h, [ref]$uid) | Out-Null',
+      '    if ($uid -ne ' + selfPid + ' -and [WinPick]::IsWindowVisible($h)) {',
+      '      $sb = New-Object System.Text.StringBuilder 256',
+      '      [WinPick]::GetWindowText($h, $sb, 256) | Out-Null',
+      '      Write-Output ($h.ToInt64().ToString() + "|" + $sb.ToString())',
+      '      exit',
+      '    }',
+      '  }',
+      '  $lastDown = $down',
+      '  Start-Sleep -Milliseconds 30',
+      '}',
+      'Write-Output "timeout"'
+    ].join('\n');
+    try {
+      const out = await runPs(script);
+      const line = out.trim();
+      if (!line || line === 'timeout') return null;
+      const idx = line.indexOf('|');
+      if (idx < 0) return null;
+      return { hwnd: line.slice(0, idx).trim(), title: line.slice(idx + 1).trim() };
+    } catch (e) {
+      console.error('[pick-window]', e.message);
+      return null;
+    } finally {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.restore();
+    }
+  });
+
+  // ===== 外部窗口透明度：常驻 PowerShell 管道进程（避免每次 spawn 的 200-500ms 延迟） =====
+  let winOpPs = null;
+  let winOpQueue = Promise.resolve();
+
+  function ensureWinOpPs() {
+    if (winOpPs && !winOpPs.killed) return winOpPs;
+    const script = [
+      'Add-Type @"',
+      'using System; using System.Runtime.InteropServices;',
+      'public class WinOp {',
+      '  public const int GWL_EXSTYLE = -20;',
+      '  public const int WS_EX_LAYERED = 0x80000;',
+      '  public const int LWA_ALPHA = 0x2;',
+      '  [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int n);',
+      '  [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr h, int n, int v);',
+      '  [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr h, uint c, byte a, uint f);',
+      '}',
+      '"@',
+      'while ($true) {',
+      '  $line = [Console]::In.ReadLine()',
+      '  if ($null -eq $line) { break }',
+      '  $line = $line.Trim()',
+      '  if ($line -eq "") { continue }',
+      '  try {',
+      '    $parts = $line.Split("|")',
+      '    $hwnd = [IntPtr][Int64]$parts[0]',
+      '    $alpha = [Int32]$parts[1]',
+      '    $ex = [WinOp]::GetWindowLong($hwnd, [WinOp]::GWL_EXSTYLE)',
+      '    [WinOp]::SetWindowLong($hwnd, [WinOp]::GWL_EXSTYLE, $ex -bor [WinOp]::WS_EX_LAYERED) | Out-Null',
+      '    $r = [WinOp]::SetLayeredWindowAttributes($hwnd, 0, $alpha, [WinOp]::LWA_ALPHA)',
+      '    [Console]::Out.WriteLine($(if ($r) { "ok" } else { "fail" }))',
+      '  } catch {',
+      '    [Console]::Out.WriteLine("error")',
+      '  }',
+      '}'
+    ].join('\n');
+    const { spawn } = require('child_process');
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
+    winOpPs = spawn('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-OutputFormat', 'Text',
+      '-EncodedCommand', encoded
+    ], { windowsHide: true });
+    winOpPs.on('close', () => { winOpPs = null; });
+    return winOpPs;
+  }
+
+  ipcMain.handle('set-win-opacity', (_e, hwnd, opacity) => {
+    const hwndSafe = String(hwnd).replace(/[^0-9]/g, '');
+    if (!hwndSafe) return false;
+    const alpha = Math.max(0, Math.min(255, Math.round(Number(opacity) * 255)));
+    const ps = ensureWinOpPs();
+    if (!ps) return false;
+    // 串行排队写 stdin（写同一行格式，管道里顺序即调用顺序）
+    winOpQueue = winOpQueue.then(() => new Promise((resolve) => {
+      try {
+        ps.stdin.write(hwndSafe + '|' + alpha + '\n');
+        resolve(true);
+      } catch (e) {
+        console.error('[set-win-opacity]', e.message);
+        resolve(false);
+      }
+    }));
+    return winOpQueue;
+  });
+
   ipcMain.on('set-opacity', (_e, value) => {
     config.opacity = clampOpacity(value);
     if (mainWindow) mainWindow.setOpacity(config.opacity);
@@ -1158,13 +1315,30 @@ function wireIpc() {
     config.speed = currentSpeed;
     saveConfig();
     applySpeedToAll();
-    // 频繁重试：iframe / 站内播放器 可能还没加载完，每500ms重试，共10次
+    // 频繁重试：iframe 可能还没加载完，每500ms重试，共10次
     let tries = 0;
     const retry = setInterval(() => {
       tries++;
       applySpeedToAll();
       if (tries >= 10) clearInterval(retry);
     }, 500);
+  });
+
+  // 无障碍强制点击：把模式广播到所有 webContents 的所有 frame（含 iframe）
+  ipcMain.on('set-a11y-mode', (_e, mode) => {
+    if (mode !== 'smart' && mode !== 'force' && mode !== 'off') return;
+    const { webContents } = require('electron');
+    const js = 'window.__pipForceMode=' + JSON.stringify(mode) + ';';
+    webContents.getAllWebContents().forEach(function(wc) {
+      try {
+        if (wc.isDestroyed()) return;
+        const walk = (frame) => {
+          try { frame.executeJavaScript(js, false).catch(function(){}); } catch (_) {}
+          try { (frame.frames || []).forEach(walk); } catch (_) {}
+        };
+        walk(wc.mainFrame);
+      } catch (_) {}
+    });
   });
 
   ipcMain.on('set-show-taskbar', (_e, show) => {
@@ -1266,8 +1440,8 @@ function wireIpc() {
     if (extras.autoRefresh !== undefined) config.autoRefresh = Number(extras.autoRefresh) || 0;
     if (extras.bossTransparent !== undefined) config.bossTransparent = !!extras.bossTransparent;
     if (extras.bossOpacity !== undefined) config.bossOpacity = Math.min(1, Math.max(0.1, Number(extras.bossOpacity) || 0.25));
+    if (extras.floatBall !== undefined) config.floatBall = !!extras.floatBall;
     if (extras.mediaControls !== undefined) config.mediaControls = !!extras.mediaControls;
-    if (extras.pauseOnBlur !== undefined) config.pauseOnBlur = !!extras.pauseOnBlur;
     if (extras.customQuickSources !== undefined && Array.isArray(extras.customQuickSources)) config.customQuickSources = extras.customQuickSources;
     saveConfig();
     return {
@@ -1276,31 +1450,9 @@ function wireIpc() {
       autoRefresh: config.autoRefresh,
       bossTransparent: config.bossTransparent,
       bossOpacity: config.bossOpacity,
-      mediaControls: config.mediaControls,
-      pauseOnBlur: !!config.pauseOnBlur,
+      floatBall: config.floatBall,
+      mediaControls: config.mediaControls
     };
-  });
-
-  ipcMain.handle('pick-target-window', async () => {
-    try {
-      // 给用户时间把鼠标移到目标窗口，再用 WindowFromPoint 取窗
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      const result = await winWindowScript('pick', 0, 255);
-      if (!result || !result.hwnd) return { ok: false, error: '没有取到目标窗口，请重试' };
-      targetWindow = { hwnd: Number(result.hwnd), title: String(result.title || '') };
-      return { ok: true, ...targetWindow };
-    } catch (e) { return { ok: false, error: e.message || '取窗失败' }; }
-  });
-  ipcMain.handle('set-target-opacity', async (_e, value) => {
-    const alpha = Math.max(13, Math.min(255, Math.round(Number(value) * 2.55)));
-    if (!targetWindow.hwnd) return { ok: false, error: '请先选择目标窗口' };
-    try { await winWindowScript('set', targetWindow.hwnd, alpha); return { ok: true, value: Math.round(alpha / 2.55) }; }
-    catch (e) { targetWindow = { hwnd: 0, title: '' }; return { ok: false, error: '目标窗口已关闭或不支持透明度' }; }
-  });
-  ipcMain.handle('reset-target-opacity', async () => {
-    if (!targetWindow.hwnd) return { ok: false, error: '请先选择目标窗口' };
-    try { await winWindowScript('reset', targetWindow.hwnd, 255); return { ok: true }; }
-    catch (e) { targetWindow = { hwnd: 0, title: '' }; return { ok: false, error: '目标窗口已关闭' }; }
   });
 
   ipcMain.on('window-close', () => setHidden(true));
@@ -1352,14 +1504,6 @@ function wireIpc() {
     catch (e) { return { error: e.message || String(e) }; }
   });
 
-  // 按路径打开 TXT（启动恢复 / 历史记录恢复用）
-  ipcMain.handle('open-txt-path', async (_e, filePath) => {
-    try {
-      if (!filePath || !fs.existsSync(filePath)) return { error: '文件不存在或已被移动' };
-      return loadTxtNovel(filePath);
-    } catch (e) { return { error: e.message || String(e) }; }
-  });
-
   ipcMain.handle('open-media', async () => {
     const res = await dialog.showOpenDialog(getDialogParent(), {
       title: '打开 TXT 或本地视频',
@@ -1388,6 +1532,25 @@ function wireIpc() {
     } catch (e) { return { error: e.message || String(e) }; }
   });
 }
+
+// 关键：主进程拦截 webview 弹窗，通过 IPC 通知渲染进程在当前 webview 打开
+// 不挑 getType()，因为 webview 的 webContents 在事件触发时类型可能还没初始化好
+app.on('web-contents-created', (event, contents) => {
+  // 跳过主窗口本身的 webContents
+  if (mainWindow && contents === mainWindow.webContents) return;
+  // 记录 webviewContents（用于静音/音量控制）
+  if (!webviewContents || webviewContents.isDestroyed()) {
+    webviewContents = contents;
+  }
+  contents.setWindowOpenHandler(({ url }) => {
+    // 只有真实网址才塞回当前小窗原地打开；
+    // about:blank 等空壳弹窗（站点开空窗再写内容的类型）直接忽略，避免把当前页面顶成白屏
+    if (mainWindow && !mainWindow.isDestroyed() && /^(https?:|file:)/.test(url)) {
+      mainWindow.webContents.send('webview-open-url', url);
+    }
+    return { action: 'deny' };
+  });
+});
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -1442,31 +1605,20 @@ if (!gotLock) {
     });
 
     // webContents创建处理：给每个webview设置窗口打开处理器（禁止弹窗，在小窗内打开）
-  app.on('web-contents-created', (_e, contents) => {
-    if (contents.getType() !== 'webview') return;
-    contents.on('did-start-navigation', (_ev, url) => {
-      if (url && /douyin|iesdouyin|aweme|huoshan|bilibili/i.test(String(url))) {
-        try { contents.setAudioMuted(!!config.muted); } catch (_) {}
-        if (currentSpeed !== 1) {
-          try { applySpeedToAll(); } catch (_) {}
+    app.on('web-contents-created', (_e, contents) => {
+      if (contents.getType() !== 'webview') return;
+      contents.setWindowOpenHandler(({ url }) => {
+        // 只原地打开真实网址；about:blank 空壳弹窗忽略，防止白屏顶掉当前页
+        if (mainWindow && !mainWindow.isDestroyed() && /^(https?:|file:)/.test(url)) {
+          mainWindow.webContents.send('webview-open-url', url);
         }
-      }
-    });
-    contents.on('did-attach-webview', () => {
-      if (currentSpeed !== 1) {
-        try { applySpeedToAll(); } catch (_) {}
-      }
-    });
-    contents.setWindowOpenHandler(({ url }) => {
-      if (mainWindow && !mainWindow.isDestroyed() && /^(https?:|about:)/.test(url)) {
-        mainWindow.webContents.send('webview-open-url', url);
-      }
-      return { action: 'deny' };
+        return { action: 'deny' };
       });
     });
 
     createWindow();
     createTray();
+    createFloatWindow();
     registerHotkeys();
   });
   app.on('will-quit', () => {

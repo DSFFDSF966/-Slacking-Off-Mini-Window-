@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="XbF1tnM3XFGsjoqzebUZDg">
+<head data-page-node-id="Hpicgww2DPYfhVKyoDDvJZ">
+<meta charset="UTF-8" data-page-node-id="GG7hfX2X7SlIlVYRxw0ipD">
+<title>无障碍点击验证页</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; padding: 24px; background: #fafafa; color: #222; }
+  h1 { font-size: 18px; } p { font-size: 13px; line-height: 1.8; }
+  .case { margin: 18px 0; padding: 14px; border: 1px dashed #bbb; position: relative; }
+  button { padding: 8px 18px; font-size: 14px; cursor: pointer; }
+  .ok { color: #0a7d32; font-weight: 600; margin-left: 10px; }
+  /* 案例1：透明无内容遮罩（智能模式应穿透） */
+  #ghostMask { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+               background: transparent; z-index: 9; }
+  /* 案例2：半透明黑色 backdrop（智能模式不应穿透，模拟正常弹窗遮罩） */
+  #darkMask { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+              background: rgba(0,0,0,.45); z-index: 9; }
+  .log { position: fixed; right: 16px; bottom: 16px; width: 260px; max-height: 45vh;
+         overflow: auto; font-size: 12px; background: #fff; border: 1px solid #ccc;
+         padding: 8px; z-index: 99; }
+</style>
+</head>
+<body data-page-node-id="1Vjr3bfo3CxXKyCE3RePbJ">
+<h1 data-page-node-id="ZKHnt18m5EIVbQbb6r5Wpb">无障碍强制点击 · 功能验证页</h1>
+<p data-page-node-id="vGH28qOS9i8Lum6nF5mnh1">用法：在摸鱼小窗地址栏打开本页，依次点击下方按钮验证。<br data-page-node-id="B1vct6poc6LuJwvORFAtGK">
+预期（智能穿透模式）：案例1 直接可点；案例2 不可点（防止误伤正常弹窗）；案例3 需切到"强穿透"。</p>
+
+<div class="case" data-page-node-id="Owzq9FMnDE9CbJVRe4vops">
+  <b data-page-node-id="e40JsAsuAeeh5IdvYcM1Tn">案例1 · 透明遮罩挡住的按钮</b>（模拟广告位清理后残留拦截层）
+  <div id="ghostMask" data-page-node-id="4oufj73wXuzlwVh1LTDz1h"></div>
+  <div data-page-node-id="0Pweo2Z5wMA28qWYrSMPlL"><button id="btn1" data-page-node-id="kTT1TnB3d8WDrKlgTQ8ppL">被透明遮罩挡住的按钮</button><span class="ok" id="ok1" data-page-node-id="szlmLWmBBzDqONpwXfT74F"></span></div>
+</div>
+
+<div class="case" data-page-node-id="4GRqGItKuAIHQVpEn0ovgD">
+  <b data-page-node-id="qqr6NcbpIC6lomiUfYlmiW">案例2 · 半透明黑色弹窗遮罩</b>（不应穿透，否则误伤正常弹窗）
+  <div id="darkMask" data-page-node-id="baUSJQEMWSkKBzSrCQGaZA"></div>
+  <div data-page-node-id="v2xA1Kgkx6a7Dl4ukVtSJ1"><button id="btn2" data-page-node-id="5dCh5oPlWLNwmYHr3jCwyz">黑色 backdrop 下的按钮</button><span class="ok" id="ok2" data-page-node-id="CuJ2MpbdWYftAuMJO26OLR"></span></div>
+</div>
+
+<div class="case" data-page-node-id="HxrgAoFjnlGDzNO3vuWcHO">
+  <b data-page-node-id="PjwWTlALe6hPbGXScI76Lo">案例3 · disabled 按钮</b>（强穿透模式应可触发）
+  <div data-page-node-id="hqYHPbeGAZCS7EFkKYeKJP"><button id="btn3" disabled data-page-node-id="iAKhgln8PtXXoMXoji1e15">disabled 状态按钮</button><span class="ok" id="ok3" data-page-node-id="ycnn66RTgQQsGzH0XM8xc8"></span></div>
+</div>
+
+<div class="log" id="log" data-page-node-id="nSJmuCaTxR1fE3hD3JbcvF"><b data-page-node-id="YY1dp1ZjzZbKuE0o3L2tCN">事件日志</b><div id="logBody" data-page-node-id="g7ImNhcxKeTqtseq7LShdD"></div></div>
+
+<script>
+  function hit(id, extra) {
+    document.getElementById('ok' + id).textContent = '✓ 已触发 ' + extra;
+    var line = document.createElement('div');
+    line.textContent = new Date().toLocaleTimeString() + ' btn' + id + ' 触发 (' + extra + ')';
+    document.getElementById('logBody').prepend(line);
+  }
+  ['1','2','3'].forEach(function (n) {
+    var b = document.getElementById('btn' + n);
+    b.addEventListener('click', function () { hit(n, 'click'); });
+    b.addEventListener('mousedown', function () { hit(n, 'mousedown'); });
+  });
+  // 案例2 的 backdrop 自身带关闭行为，验证"黑色遮罩不穿透"是否保住了它
+  document.getElementById('darkMask').addEventListener('click', function () {
+    var line = document.createElement('div');
+    line.textContent = new Date().toLocaleTimeString() + ' backdrop 自身被点击（正常）';
+    document.getElementById('logBody').prepend(line);
+  });
+</script>
+</body>
+</html>

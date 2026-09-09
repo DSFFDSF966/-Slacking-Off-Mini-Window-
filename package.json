@@ -34,7 +34,6 @@
       "index.html",
       "welcome.html",
       "webview-preload.js",
-      "win-window.ps1",
       "bs.json",
       "novel-sources.json",
       "使用说明.txt",
@@ -42,7 +41,6 @@
       "build/**/*",
       "package.json"
     ],
-    "extraResources": ["win-window.ps1"],
     "win": {
       "target": [
         {
@@ -50,7 +48,7 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "build/icon.ico",
+      "icon": "build/icon.png",
       "artifactName": "PipReader.exe",
       "signAndEditExecutable": false
     },
