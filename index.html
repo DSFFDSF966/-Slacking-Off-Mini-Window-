@@ -1810,6 +1810,17 @@
     // 应用内热键处理（只在小窗内生效，不拦截系统打字）
     function handleAppHotkey(e) {
       if (!e) return false;
+      // 备用老板键 ` ：改为应用内触发（全局注册会吞掉系统所有输入框里的反引号）。
+      // 焦点在输入框内时让位给正常输入；若用户把 ` 本身设成老板键，走全局注册，这里跳过。
+      var tgt = e.target;
+      var typing = tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable);
+      if (!typing && e.key === '`' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey
+          && String(hotkeys.hide || '').trim() !== '`'
+          && window.stealth && window.stealth.toggleHidden) {
+        if (e.preventDefault) e.preventDefault();
+        window.stealth.toggleHidden();
+        return true;
+      }
       if (matchHotkey(e, hotkeys.chrome)) { if (e.preventDefault) e.preventDefault(); toggleChrome(); return true; }
       if (matchHotkey(e, hotkeys.pin)) { if (e.preventDefault) e.preventDefault(); $('pin').click(); return true; }
       if (matchHotkey(e, hotkeys.toc)) { if (e.preventDefault) e.preventDefault(); toggleToc(); return true; }
@@ -2037,7 +2048,7 @@
     }
 
     // 启动时恢复上次会话（网页/小说/视频/分屏）
-    function restoreSession(state) {
+    function restoreSession(state, lastBookInfo) {
       const wantSplit = !!(state.splitState && state.splitState.active);
       if (wantSplit) {
         // 分屏：左侧恢复上次网页，右侧交给 autoRestoreLastBook 恢复小说
@@ -2052,6 +2063,12 @@
       } else if (lastMode === 'video' && state.lastVideoPath) {
         // 本地视频：恢复播放位置
         openLocalVideo(state.lastVideoPath, true);
+      } else if (lastMode === 'book' && lastBookInfo && lastBookInfo.chapters && lastBookInfo.chapters.length) {
+        // 上次在读小说：直接把阅读界面亮出来，正文由 autoRestoreLastBook 填。
+        // 原逻辑会先 setMode('web') 加载上次网页、250~800ms 后再翻到阅读界面，
+        // 启动时那一下"网页闪现又切走"就是这么来的。
+        setMode('book');
+        $('readerFoot').classList.remove('hidden');
       } else if (state.url && state.url.indexOf('welcome.html') < 0) {
         // 网页：恢复上次页面
         setMode('web'); activeView().src = state.url; $('url').value = state.url;
@@ -2130,7 +2147,14 @@
       refreshQuickSite();
       applyToolbar();
 
-      restoreSession(state);
+      // 预取上次书籍信息：用来判断"上次是不是在读小说"，决定是否直接进阅读界面
+      let lastBookInfo = null;
+      try { lastBookInfo = await window.stealth.loadProgress('last-book-info'); } catch (e) {}
+      restoreSession(state, lastBookInfo);
+
+      // 首屏状态已应用完，通知主进程可以显示窗口了（避免"先显示默认样式再闪一下"）。
+      // 阅读模式例外：等 autoRestoreLastBook 把正文铺好再显示，见其 finally。
+      if (mode !== 'book') { try { window.stealth.uiReady(); } catch (e) {} }
 
       window.addEventListener('resize', relayoutWeb);
       new ResizeObserver(relayoutWeb).observe($('viewHost'));
@@ -2802,8 +2826,41 @@
         $('reader').appendChild(hint);
       }
 
+      // 等排版稳定后再定位：字体/分章注入会让 scrollHeight 连续变化，
+      // 原来固定等 100ms 设一次 scrollTop，内容还没铺满就被钳制到错误的 max，表现为"跳一下"。
+      // 逐帧观察 scrollHeight，连续两帧不变才落位置；窗口未显示时 rAF 可能被节流，
+      // 所以另设 700ms 兜底，并且返回 Promise —— 调用方要等定位完成再让窗口出现。
+      function applyScrollRatio(el, ratio) {
+        return new Promise(function (resolve) {
+          var done = false;
+          function finish() {
+            if (done) return;
+            done = true;
+            var max = Math.max(1, el.scrollHeight - el.clientHeight);
+            var r = Math.max(0, Math.min(1, Number(ratio) || 0));
+            el.scrollTop = r * max;
+            renderReaderFoot();
+            resolve();
+          }
+          var last = -1, stable = 0, frames = 0;
+          function step() {
+            if (done) return;
+            frames++;
+            var h = el.scrollHeight;
+            if (h === last) stable++; else { stable = 0; last = h; }
+            if (stable < 2 && frames < 30) { requestAnimationFrame(step); return; }
+            finish();
+          }
+          requestAnimationFrame(step);
+          setTimeout(finish, 700);
+        });
+      }
+
       // 启动时自动恢复上次的小说阅读
       async function autoRestoreLastBook() {
+        // 只有"上次在读小说"或"分屏"才需要把整章正文load进来；
+        // 纯网页模式原来也会无条件加载一章（白耗一次分章+排版），是启动卡顿的来源之一
+        if (lastMode !== 'book' && !splitMode) return;
         try {
           const lastBook = await window.stealth.loadProgress('last-book-info');
           if (lastBook && lastBook.book && lastBook.chapters && lastBook.chapters.length > 0) {
@@ -2825,13 +2882,8 @@
               if (novelFont) $('novel').style.fontFamily = novelFont;
               $('novel').style.lineHeight = lineHeight;
               await loadChapter(chap, false);
-              // 恢复滚动位置
-              setTimeout(function() {
-                const el = $('novel');
-                const max = Math.max(1, el.scrollHeight - el.clientHeight);
-                el.scrollTop = (prog.ratio || 0) * max;
-                renderReaderFoot();
-              }, 100);
+              // 恢复滚动位置（等排版稳定后再落，并等它完成，避免窗口先出现再跳）
+              await applyScrollRatio($('novel'), prog.ratio || 0);
             }
             // 上次是纯小说模式（且不在分屏）→ 切到阅读界面；分屏时保持左网页右小说
             if (lastMode === 'book' && !splitMode) {
@@ -2840,9 +2892,14 @@
             }
           }
         } catch (e) { console.log('自动恢复小说失败:', e); }
+        finally {
+          // 正文（或失败）都已处理完，这时候才让主进程显示窗口，
+          // 否则会先看到一个空白的阅读区再突然灌满文字
+          try { window.stealth.uiReady(); } catch (e) {}
+        }
       }
-      // 延迟自动恢复，避免启动时冲突
-      setTimeout(autoRestoreLastBook, 800);
+      // 恢复小说不再拖到 800ms：直进阅读界面时正文应尽快到位
+      setTimeout(autoRestoreLastBook, 60);
 
       // 加载小说历史记录
       (async function() {

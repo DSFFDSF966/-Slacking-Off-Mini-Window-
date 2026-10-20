@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('stealth', {
   getState: () => ipcRenderer.invoke('get-state'),
+  uiReady: () => ipcRenderer.send('ui-ready'),
   setOpacity: (v) => ipcRenderer.send('set-opacity', v),
   saveUrl: (url) => ipcRenderer.send('save-url', url),
   toggleHidden: () => ipcRenderer.send('toggle-hidden'),

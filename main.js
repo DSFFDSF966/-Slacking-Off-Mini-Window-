@@ -319,9 +319,9 @@ async function novelSearch(keyword) {
   // 2. 再搜 binbyu/Reader 格式的书源（XPath 类型）
   for (let i = 0; i < BOOK_SOURCES.length; i++) {
     try {
-      const r = await searchBooks(i, keyword);
-      if (r && r.results && r.results.length > 0) {
-        for (const b of r.results) {
+      const arr = await searchBooks(i, keyword);
+      if (Array.isArray(arr) && arr.length > 0) {
+        for (const b of arr) {
           results.push({
             id: b.url || b.name,
             name: b.name || '',
@@ -429,6 +429,7 @@ const DEFAULT_CONFIG = {
   customSearchSources: [],
   customQuickSources: [], // 用户自定义快速搜索源
   mediaControls: false, // 媒体控制栏开关
+  removedSites: [], // 用户删掉的内置站点 URL；否则下次启动会被 mergeSites 重新拼回来
   bounds: { width: 560, height: 380 },
   hotkeys: { ...DEFAULT_HOTKEYS },
   // ===== v2 新增：会话/布局状态 =====
@@ -541,6 +542,22 @@ function applySpeedToAll() {
   });
 }
 
+// 把一段脚本广播到所有 webContents 的所有 frame（含 iframe）
+// 音量/静音这类"全局媒体状态"必须走这里，否则分屏时只作用到其中一个 webview
+function broadcastToAllFrames(js) {
+  const { webContents } = require('electron');
+  webContents.getAllWebContents().forEach(function (wc) {
+    try {
+      if (wc.isDestroyed()) return;
+      const walk = (frame) => {
+        try { frame.executeJavaScript(js, false).catch(function () {}); } catch (_) {}
+        try { (frame.frames || []).forEach(walk); } catch (_) {}
+      };
+      walk(wc.mainFrame);
+    } catch (_) {}
+  });
+}
+
 const AD_HOSTS = [
   // 谷歌系
   'doubleclick.net', 'googleadservices.com', 'googlesyndication.com',
@@ -590,10 +607,12 @@ function shouldBlockUrl(url) {
 }
 
 // 合并默认站点和用户站点，按 URL 去重，默认站点在前
-function mergeSites(defaultSites, userSites) {
+function mergeSites(defaultSites, userSites, removedUrls) {
+  const removed = new Set(Array.isArray(removedUrls) ? removedUrls : []);
   const seen = new Set();
   const result = [];
   defaultSites.forEach(function(s) {
+    if (removed.has(s.url)) return;          // 用户删掉的内置站点不再补回来
     if (!seen.has(s.url)) { seen.add(s.url); result.push(s); }
   });
   userSites.forEach(function(s) {
@@ -613,7 +632,12 @@ function loadConfig() {
         ...DEFAULT_CONFIG,
         ...raw,
         hotkeys: { ...DEFAULT_HOTKEYS, ...(raw.hotkeys || {}) },
-        customSites: mergeSites(DEFAULT_SITES, Array.isArray(raw.customSites) ? raw.customSites : [])
+        removedSites: Array.isArray(raw.removedSites) ? raw.removedSites.filter(u => typeof u === 'string') : [],
+        customSites: mergeSites(
+          DEFAULT_SITES,
+          Array.isArray(raw.customSites) ? raw.customSites : [],
+          Array.isArray(raw.removedSites) ? raw.removedSites : []
+        )
       };
       // ===== 配置校验（防止损坏/非法值导致启动异常）=====
       if (!config.bounds || typeof config.bounds.width !== 'number' || typeof config.bounds.height !== 'number') {
@@ -747,6 +771,10 @@ function setHidden(next) {
   hidden = next;
   const { webContents } = require('electron');
   if (hidden) {
+    // 隐藏等于"暂时离开"：先把配置和阅读进度落盘，
+    // 否则之后若被任务管理器结束/直接关机，最后 300+500ms 的进度会丢
+    flushConfig();
+    flushProgress();
     // 老板键增强：遍历所有 webContents（主窗口+webview+所有iframe），全部静音+暂停
     webContents.getAllWebContents().forEach(function(wc) {
       try { wc.setAudioMuted(true); } catch (_) {}
@@ -784,8 +812,6 @@ function getDialogParent() {
   return undefined;
 }
 
-let webviewContents = null;
-
 // ===== 外部窗口透明度用的常驻 PowerShell 进程 =====
 // 这个进程是常驻的（脚本里 while($true){ReadLine}），实测占用约 76MB，
 // 外加配套 conhost 约 8MB。原实现只在 ensureWinOpPs 内部持句柄、退出时也不回收，
@@ -806,7 +832,7 @@ function killWinOpPs() {
 }
 
 // 按需查找 webview 的 webContents。释放内存时必须实时查，不能依赖早先缓存的引用
-// （缓存的 webviewContents 只在创建时赋值一次，可能指向已失效或非 webview 的实例）。
+// （缓存的引用只在创建时赋值一次，可能指向已失效或非 webview 的实例）。
 function getWebviewContents() {
   const { webContents } = require('electron');
   const all = webContents.getAllWebContents();
@@ -816,6 +842,21 @@ function getWebviewContents() {
     } catch (_) {}
   }
   return null;
+}
+
+// 首屏就绪后再显示窗口：
+// 原来 ready-to-show 就 show()，此时渲染进程还在 await getState()，
+// 用户会看到"默认样式先出来 → 状态应用后闪一下"（透明度/背景/工具栏/小说界面都会跳）。
+// 现在等渲染进程发来 ui-ready（init 走完）再显示，另设兜底定时器防止异常时窗口永不出现。
+let windowShown = false;
+function revealWindow() {
+  if (windowShown || !mainWindow || mainWindow.isDestroyed()) return;
+  windowShown = true;
+  if (hidden) return;   // 用户已经用老板键藏起来了，兜底定时器不要再把窗口弹出来
+  try {
+    mainWindow.show();
+    mainWindow.setSkipTaskbar(!config.showTaskbar);
+  } catch (_) {}
 }
 
 function createWindow() {
@@ -883,8 +924,9 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show();
-    mainWindow.setSkipTaskbar(!config.showTaskbar);
+    // 不在这里直接 show：等渲染进程 ui-ready（见 revealWindow 注释）。
+    // 1.2s 兜底，避免 init 抛异常时窗口一直不出来。
+    setTimeout(revealWindow, 1200);
   });
   mainWindow.on('show', () => mainWindow.setSkipTaskbar(!config.showTaskbar));
   // 防老板透明渐变：窗口失去焦点时自动变透明，获得焦点时恢复
@@ -898,7 +940,8 @@ function createWindow() {
       mainWindow.setOpacity(clampOpacity(config.opacity));
     }
   });
-  mainWindow.on('close', (e) => { e.preventDefault(); setHidden(true); flushConfig(); });
+  // 关闭按钮 = 隐藏到托盘；落盘由 setHidden 统一处理（含进度与窗口位置）
+  mainWindow.on('close', (e) => { e.preventDefault(); setHidden(true); });
   mainWindow.on('closed', () => { mainWindow = null; });
   // 窗口移动/缩放：防抖记录位置，进程被杀也能恢复上次位置
   mainWindow.on('move', saveConfig);
@@ -912,7 +955,10 @@ function createWindow() {
   });
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     console.error('[main] 渲染进程崩溃:', details.reason, details.exitCode);
-    // 渲染进程崩溃后自动 reload
+    // reload 前先把主进程已收到的进度/配置落盘：
+    // reload 会重新走 init → autoRestoreLastBook，只有落盘的进度才能恢复到同一章
+    flushProgress();
+    flushConfig();
     if (mainWindow && !mainWindow.isDestroyed()) {
       try { mainWindow.reload(); } catch (e) {}
     }
@@ -961,11 +1007,14 @@ function registerHotkeys() {
   const hk = { ...DEFAULT_HOTKEYS, ...(config.hotkeys || {}) };
   // 只有老板键（隐身/显示）注册为全局热键——这个需要随时触发
   // 其他热键（去顶栏/置顶/目录/说明书）改为应用内热键，不拦截系统打字
-  if (hk.hide) {
-    try { globalShortcut.register(String(hk.hide), () => toggleHidden()); } catch (_) {}
+  const hideKey = String(hk.hide || '').trim();
+  if (hideKey) {
+    try { globalShortcut.register(hideKey, () => toggleHidden()); } catch (_) {}
   }
-  // ` 键作为备用老板键
-  try { globalShortcut.register('`', () => toggleHidden()); } catch (_) {}
+  // 备用 ` 键不再全局注册：全局热键是系统级的，注册后 VS Code、终端、任何输入框里
+  // 都敲不出反引号。改为在 index.html 的 handleAppHotkey 里做应用内触发——
+  // 窗口有焦点时 ` 照样能隐窗，没焦点时靠上面自定义的老板键。
+  // （若用户把老板键本身设成 `，上面的全局注册已经覆盖，应用内会跳过以免双触发）
 }
 
 function loadProgressMap() {
@@ -1042,6 +1091,8 @@ function wireIpc() {
     lineHeight: Number(config.lineHeight) || 1.9,
     version: config.version || 2
   }));
+
+  ipcMain.on('ui-ready', () => revealWindow());
 
   ipcMain.handle('save-hotkeys', (_e, hk) => {
     config.hotkeys = { ...DEFAULT_HOTKEYS, ...(hk || {}) };
@@ -1382,13 +1433,16 @@ function wireIpc() {
     config.speed = currentSpeed;
     saveConfig();
     applySpeedToAll();
-    // 频繁重试：iframe 可能还没加载完，每500ms重试，共10次
-    let tries = 0;
-    const retry = setInterval(() => {
-      tries++;
-      applySpeedToAll();
-      if (tries >= 10) clearInterval(retry);
-    }, 500);
+    // 补注入只针对"iframe 还没加载完"这个场景：1s / 3s / 6s 三次足够。
+    // 原实现是每 500ms 重试、共 10 次 = 切一次倍速要全量注入 11 遍（每遍遍历所有
+    // webContents 的所有 frame），这是切倍速时明显卡一下的直接原因。
+    const retryDelays = [1000, 3000, 6000];
+    retryDelays.forEach(function (ms) {
+      setTimeout(function () {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        applySpeedToAll();
+      }, ms);
+    });
   });
 
   // 无障碍强制点击：把模式广播到所有 webContents 的所有 frame（含 iframe）
@@ -1429,10 +1483,11 @@ function wireIpc() {
   ipcMain.on('set-volume', (_e, vol) => {
     const v = Math.min(1, Math.max(0, Number(vol) || 0));
     config.volume = v;
-    if (webviewContents) {
-      const js = `(function(){document.querySelectorAll('video,audio').forEach(function(el){try{el.volume=${v}}catch(e){}})})()`;
-      try { webviewContents.executeJavaScript(js, false).catch(function(){}); } catch (_) {}
-    }
+    // 与 set-muted 保持一致：作用于所有 webview / iframe
+    // 原实现只对缓存的单个 webviewContents 生效，分屏时音量条只影响其中一个
+    broadcastToAllFrames(
+      `(function(){document.querySelectorAll('video,audio').forEach(function(el){try{el.volume=${v}}catch(e){}})})()`
+    );
     saveConfig();
   });
 
@@ -1451,6 +1506,10 @@ function wireIpc() {
     }
     if (Array.isArray(settings.customSites)) {
       config.customSites = settings.customSites.filter(s => s && s.name && s.url);
+      // 记录"被删掉的内置站点"：mergeSites 每次启动会把 DEFAULT_SITES 拼回来，
+      // 不记这个黑名单，用户删掉的内置站点重启就会复活
+      const kept = new Set(config.customSites.map(s => s.url));
+      config.removedSites = DEFAULT_SITES.map(s => s.url).filter(u => !kept.has(u));
     }
     if (settings.novelFont) {
       config.novelFont = String(settings.novelFont);
@@ -1592,10 +1651,6 @@ function wireIpc() {
 app.on('web-contents-created', (event, contents) => {
   // 跳过主窗口本身的 webContents
   if (mainWindow && contents === mainWindow.webContents) return;
-  // 记录 webviewContents（用于静音/音量控制）
-  if (!webviewContents || webviewContents.isDestroyed()) {
-    webviewContents = contents;
-  }
   contents.setWindowOpenHandler(({ url }) => {
     // 只有真实网址才塞回当前小窗原地打开；
     // about:blank 等空壳弹窗（站点开空窗再写内容的类型）直接忽略，避免把当前页面顶成白屏
