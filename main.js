@@ -28,12 +28,12 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection]', reason);
 });
-app.on('render-process-gone', (_e, details) => {
-  console.error('[render-process-gone]', details.reason, details.exitCode);
-  // 渲染进程崩溃后，通知渲染进程恢复（如果主窗口还在）
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    try { mainWindow.reload(); } catch (e) {}
-  }
+// 注意：app 级事件签名是 (event, webContents, details)，原实现把第二个参数当 details 用错了。
+// 这里只记日志：主窗口崩溃由 createWindow 里带 flush 的专用处理器恢复；
+// webview 崩溃由 index.html 的 crashed/render-process-gone 监听原地重载。
+// 原实现任何 webview 崩溃都会 reload 整个主窗口——这是"整窗白一下/阅读状态丢失"的来源之一。
+app.on('render-process-gone', (_e, _wc, details) => {
+  try { console.error('[render-process-gone]', details && details.reason, details && details.exitCode); } catch (_) {}
 });
 app.on('child-process-gone', (_e, details) => {
   console.error('[child-process-gone]', details.type, details.reason);
@@ -443,13 +443,19 @@ const DEFAULT_CONFIG = {
 
 let mainWindow = null;
 let tray = null;
-let floatWindow = null; // 桌面浮动球
 let hidden = false;
 let config = { ...DEFAULT_CONFIG };
 let currentSpeed = 1;
+let lastSpeedApply = 0;      // applySpeedToAll  burst 节流
+let speedRetryTimers = [];   // set-speed 的补注入定时器，新倍速到来时取消旧的
 
 // 遍历所有 webContents 应用倍速（递归所有 iframe + Shadow DOM，腾讯视频等站的播放器在 iframe 里）
-function applySpeedToAll() {
+// force=true 用于用户主动切倍速（立即生效）；页面加载事件触发的自动注入走 350ms 节流，
+// 把 dom-ready + did-finish-load 的连发合并成一次，避免重复全量注入。
+function applySpeedToAll(force) {
+  const now = Date.now();
+  if (!force && now - lastSpeedApply < 350) return;
+  lastSpeedApply = now;
   const { webContents } = require('electron');
   const rate = currentSpeed;
   // 递归遍历 Shadow DOM + iframe，找到所有 video/audio 元素
@@ -508,6 +514,25 @@ function applySpeedToAll() {
           if (v.playbackRate !== r) v.playbackRate = r;
         } catch(e) {}
       });
+    }
+    // 1x = 默认态：把控制权还给网站。只重置被我们改过的元素，摘掉守卫/观察器/定时器。
+    // 原实现切回 1x 后 observer + 60 秒定时器仍在跑、持续强制 1x，
+    // 既白耗 CPU，还会跟网站播放器自己的倍速按钮打架。
+    if (r === 1) {
+      try {
+        deepMedia(document).forEach(function(v){
+          try {
+            if (v.__pipRateFor !== undefined) {
+              try { v.removeEventListener('ratechange', v.__pipRateGuard, true); } catch(e) {}
+              delete v.__pipRateFor; delete v.__pipRateGuard;
+              v.defaultPlaybackRate = 1; v.playbackRate = 1;
+            }
+          } catch(e) {}
+        });
+      } catch(e) {}
+      if (window.__pipSpeedObs) { try { window.__pipSpeedObs.disconnect(); } catch(e) {} window.__pipSpeedObs = null; }
+      if (window.__pipSpeedTimer) { clearInterval(window.__pipSpeedTimer); window.__pipSpeedTimer = null; }
+      return;
     }
     setSpeed();
     if (!window.__pipSpeedObs) {
@@ -892,7 +917,7 @@ function createWindow() {
     backgroundColor: '#ffffff',
     show: false,
     title: config.customTitle || '小窗',
-    icon: path.join(__dirname, 'build', 'icon.jpg'),
+    icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -966,7 +991,7 @@ function createWindow() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, 'build', 'icon.jpg');
+  const iconPath = path.join(__dirname, 'build', 'icon.png');
   const img = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createFromDataURL(
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAAD/eMzBAAAAGUlEQVQ4T2P8z8DAwMDAwMDAwMDAwMDAAAAn+AFq4s3vAAAAAElFTkSuQmCC'
   );
@@ -1432,16 +1457,19 @@ function wireIpc() {
     currentSpeed = Math.min(4, Math.max(0.5, Number(rate) || 1));
     config.speed = currentSpeed;
     saveConfig();
-    applySpeedToAll();
+    // 取消上一次倍速留下的补注入定时器，快速连点倍速时不叠加注入
+    speedRetryTimers.forEach(function (t) { clearTimeout(t); });
+    speedRetryTimers = [];
+    applySpeedToAll(true);
     // 补注入只针对"iframe 还没加载完"这个场景：1s / 3s / 6s 三次足够。
     // 原实现是每 500ms 重试、共 10 次 = 切一次倍速要全量注入 11 遍（每遍遍历所有
     // webContents 的所有 frame），这是切倍速时明显卡一下的直接原因。
     const retryDelays = [1000, 3000, 6000];
     retryDelays.forEach(function (ms) {
-      setTimeout(function () {
+      speedRetryTimers.push(setTimeout(function () {
         if (!mainWindow || mainWindow.isDestroyed()) return;
         applySpeedToAll();
-      }, ms);
+      }, ms));
     });
   });
 
@@ -1712,17 +1740,8 @@ if (!gotLock) {
       } catch (e) { console.error('[download] error:', e.message); }
     });
 
-    // webContents创建处理：给每个webview设置窗口打开处理器（禁止弹窗，在小窗内打开）
-    app.on('web-contents-created', (_e, contents) => {
-      if (contents.getType() !== 'webview') return;
-      contents.setWindowOpenHandler(({ url }) => {
-        // 只原地打开真实网址；about:blank 空壳弹窗忽略，防止白屏顶掉当前页
-        if (mainWindow && !mainWindow.isDestroyed() && /^(https?:|file:)/.test(url)) {
-          mainWindow.webContents.send('webview-open-url', url);
-        }
-        return { action: 'deny' };
-      });
-    });
+    // webview 的弹窗拦截已由上方 app 级 web-contents-created 统一注册（覆盖所有非主窗口
+    // webContents），这里原来重复注册了一遍同样的处理器，已移除。
 
     createWindow();
     createTray();

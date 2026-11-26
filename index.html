@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: file: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' file: blob:; img-src 'self' data: file:;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: file: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' file: blob:; img-src 'self' data: file: https: http:;" />
   <title>小窗</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -268,7 +268,6 @@
     }
     .section-reset:hover { color: #e53e3e; border-color: rgba(229,62,62,0.3); }
     .section-title:first-child { margin-top: 0; padding-top: 0; border-top: none; }
-    .actions { display: flex; gap: 8px; justify-content: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.08); }
     .actions { display: flex; gap: 12px; justify-content: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.08); }
     .actions button {
       background: #fff;
@@ -469,7 +468,7 @@
             <p><b>快速上手</b>：地址栏输入网址或搜词 → 点 Go，就能在小窗里看任何网页。</p>
             <p style="margin-bottom:4px;"><b>顶部按钮（从左到右）</b>：</p>
             <ul style="margin-top:0;padding-left:18px;">
-              <li><b>主页</b>：回到欢迎页</li>
+              <li><b>空地址栏 + Go</b>：回到欢迎页</li>
               <li><b>上一页/下一页</b>：网页前进后退</li>
               <li><b>刷新</b>：刷新当前页面</li>
               <li><b>搜索</b>：搜小说，在线看</li>
@@ -485,7 +484,7 @@
             </ul>
             <p style="margin-bottom:4px;"><b>快捷键</b>：</p>
             <ul style="margin-top:0;padding-left:18px;">
-              <li><kbd>F12</kbd> 老板键（默认，可改）：一键隐身/显示</li>
+              <li><kbd>Alt+H</kbd> 老板键（默认，可改）：一键隐身/显示；窗口内按 <kbd>`</kbd> 也能隐身</li>
               <li><kbd>Ctrl+滚轮</kbd> 放大/缩小网页</li>
               <li><kbd>Alt+滚轮</kbd> 调窗口透明度</li>
               <li><kbd>Ctrl+M</kbd> 一键静音</li>
@@ -507,7 +506,7 @@
             <ul style="margin-top:0;padding-left:18px;">
               <li>背景图片、快速搜索源、顶栏按钮显示</li>
               <li>热键（老板键等）、外观（标题/字体）</li>
-              <li>快捷网站、小说搜索源、桌面浮动球</li>
+              <li>快捷网站、小说搜索源</li>
               <li>每个分类都有"恢复默认"，不怕改坏</li>
             </ul>
             <p style="margin-bottom:4px;"><b>常见问题</b>：</p>
@@ -718,6 +717,13 @@
   <script>
     const $ = (id) => document.getElementById(id);
     const view = $('view');
+    // HTML 转义：书名/章节名/网页标题来自外部站点，拼进 innerHTML 前必须转义。
+    // 原代码调用了 escapeHtml 但从未定义，小说搜索一返回结果就抛 ReferenceError，整个搜索不可用。
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
     let mode = 'web';
     let novel = null;
     let chap = 0;
@@ -1061,12 +1067,9 @@
       $('url').value = '';
     }
 
-    function applySpeed() {
-      if (mode === 'video') { $('video').playbackRate = speed; return; }
-      if (mode !== 'web') return;
-      // 主进程 set-speed 会遍历所有 webContents（包括 iframe）应用倍速
-      window.stealth.setSpeed(speed);
-    }
+    // 倍速应用说明：页面加载后的倍速恢复由主进程在 dom-ready/did-finish-load 自动完成
+    // （仅 speed≠1 时）。原来渲染层在三个加载事件里再各发一次 set-speed，
+    // 默认 1x 也会触发全量注入+补注入+60秒观察器，是白耗 CPU 的大头，已移除。
 
     function adCss() {
       const css = `
@@ -1096,7 +1099,7 @@
           mutations.forEach(function(m) {
             m.addedNodes.forEach(function(node) {
               if (node.nodeType !== 1) return;
-              var text = (node.innerText || node.textContent || '').trim();
+              var text = (node.textContent || '').trim(); // textContent 不触发强制布局；原 innerText 每次 DOM 变动都 flush 一次布局
               if (text.length > 0 && text.length < 20) {
                 if (/^(广告|推广|赞助|AD|Advertisement)$/i.test(text)) {
                   node.style.display = 'none';
@@ -1177,8 +1180,8 @@
         return;
       }
       list.innerHTML = favorites.map(function(f, i) {
-        return '<div class="dropdown-item" data-url="' + f.url + '">' +
-          '<span class="title" title="' + f.name + '">' + f.name + '</span>' +
+        return '<div class="dropdown-item" data-url="' + escapeHtml(f.url) + '">' +
+          '<span class="title" title="' + escapeHtml(f.name) + '">' + escapeHtml(f.name) + '</span>' +
           '<span class="del" data-idx="' + i + '">删除</span></div>';
       }).join('');
       list.querySelectorAll('.dropdown-item').forEach(function(item) {
@@ -1221,8 +1224,8 @@
         } else {
           list.innerHTML = tabs + history.map(function(h) {
             const time = new Date(h.time).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-            return '<div class="dropdown-item" data-url="' + h.url + '">' +
-              '<span class="title" title="' + h.title + '">' + h.title + '</span>' +
+            return '<div class="dropdown-item" data-url="' + escapeHtml(h.url) + '">' +
+              '<span class="title" title="' + escapeHtml(h.title) + '">' + escapeHtml(h.title) + '</span>' +
               '<span style="color:#999;font-size:10px;margin-left:8px;">' + time + '</span></div>';
           }).join('');
         }
@@ -1242,8 +1245,8 @@
             const name = h.book && h.book.name ? h.book.name : '未知小说';
             const chap = h.chapterTitle || ('第' + (h.chapter + 1) + '章');
             return '<div class="dropdown-item" data-idx="' + idx + '">' +
-              '<span class="title" title="' + name + '">' + name + '</span>' +
-              '<span style="color:#666;font-size:10px;margin-left:8px;">' + chap + '</span>' +
+              '<span class="title" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span>' +
+              '<span style="color:#666;font-size:10px;margin-left:8px;">' + escapeHtml(chap) + '</span>' +
               '<span style="color:#999;font-size:10px;margin-left:8px;">' + time + '</span></div>';
           }).join('');
         }
@@ -1316,35 +1319,9 @@
       });
     }
 
-    // 渲染搜索源下拉菜单
-    function renderSearchSources() {
-      const sel = $('searchSource');
-      const sources = searchSources.novel || [];
-      sel.innerHTML = sources.map(function(s, i) {
-        return '<option value="' + i + '">' + s.name + '</option>';
-      }).join('');
-    }
-
-    // 渲染搜索结果
-    function renderSearchResults(results) {
-      $('searchArea').style.display = 'none';
-      $('searchResults').style.display = 'block';
-      $('searchBack').style.display = 'inline';
-      $('searchResults').innerHTML = results.map(function(book, i) {
-        return '<div class="search-result-item" data-index="' + i + '" style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.05);cursor:pointer;">' +
-          '<div style="font-size:13px;font-weight:600;">' + escapeHtml(book.name) + '</div>' +
-          '<div style="font-size:11px;color:#999;margin-top:2px;">' + escapeHtml(book.author || '未知作者') + ' · ' + escapeHtml(book.source) + '</div>' +
-          '</div>';
-      }).join('');
-      // 绑定点击事件
-      document.querySelectorAll('.search-result-item').forEach(function(el) {
-        el.onclick = function() {
-          const idx = Number(el.getAttribute('data-index'));
-          currentBook = results[idx];
-          loadChapters(currentBook.url);
-        };
-      });
-    }
+    // 旧版 renderSearchSources / renderSearchResults 已删除：
+    // 引用界面上不存在的 searchSource / searchArea 元素，且无任何调用点（死代码）。
+    // 现行搜索渲染走 renderUnifiedSearchResults。
 
     // 统一搜索结果渲染（带封面、作者、简介、来源）
     let unifiedResults = [];
@@ -1471,63 +1448,9 @@
       }
     }
 
-    // 加载章节列表
-    async function loadChapters(bookUrl) {
-      $('searchResults').style.display = 'none';
-      $('chapterList').style.display = 'block';
-      $('searchBack').style.display = 'inline';
-      $('chapterList').innerHTML = '<div style="padding:20px;text-align:center;color:#999;font-size:12px;">加载章节中...</div>';
-      try {
-        const result = await window.stealth.getChapters(currentSourceIndex, bookUrl);
-        if (result.ok && result.chapters.length > 0) {
-          $('chapterList').innerHTML = '<div style="font-size:12px;color:#666;margin-bottom:6px;">共 ' + result.chapters.length + ' 章</div>' +
-            result.chapters.map(function(ch, i) {
-              return '<div class="chapter-item" data-index="' + i + '" style="padding:6px 4px;border-bottom:1px solid rgba(0,0,0,0.04);cursor:pointer;font-size:12px;">' +
-                escapeHtml(ch.title) + '</div>';
-            }).join('');
-          document.querySelectorAll('.chapter-item').forEach(function(el) {
-            el.onclick = function() {
-              const idx = Number(el.getAttribute('data-index'));
-              openChapter(result.chapters, idx);
-            };
-          });
-        } else {
-          $('chapterList').innerHTML = '<div style="padding:10px;text-align:center;color:#999;font-size:12px;">' + (result.error ? '加载失败: ' + result.error : '无章节') + '</div>';
-        }
-      } catch (e) {
-        $('chapterList').innerHTML = '<div style="padding:10px;text-align:center;color:#999;font-size:12px;">出错: ' + e.message + '</div>';
-      }
-    }
-
-    // 打开章节（创建完整目录，按需加载正文）
-    async function openChapter(chapterList, startIndex) {
-      $('searchPanel').classList.remove('show');
-      // 构造 novel 对象：所有章节标题，内容为空（懒加载）
-      novel = {
-        title: currentBook ? currentBook.name : '在线小说',
-        chapters: chapterList.map(function(ch) {
-          return { title: ch.title, lines: null, _url: ch.url, _loaded: false };
-        })
-      };
-      progressKey = 'online_' + (currentBook ? currentBook.name : 'novel');
-      setMode('book');
-      $('url').value = novel.title;
-      // 渲染目录
-      const toc = $('toc');
-      toc.classList.remove('hidden');
-      toc.innerHTML = '<div class="h">目录 ' + novel.chapters.length + '</div>';
-      novel.chapters.forEach(function(c, i) {
-        const el = document.createElement('div');
-        el.className = 'i';
-        el.textContent = c.title;
-        el.onclick = function() { showChap(i, 0); };
-        toc.appendChild(el);
-      });
-      document.title = novel.title;
-      // 加载并显示起始章节
-      await loadOnlineChapter(startIndex);
-      showChap(startIndex, 0);
-    }
+    // 旧版 loadChapters / openChapter 已删除：唯一入口是上面已移除的 renderSearchResults，
+    // 整条链路不可达。现行流程：doSearch → renderUnifiedSearchResults → loadUnifiedChapters
+    // → loadUnifiedContent；loadOnlineChapter 仍被阅读器主流程使用，保留。
 
     // 加载在线小说章节正文
     async function loadOnlineChapter(index) {
@@ -2027,17 +1950,18 @@
           hideScrollbar = true;
           darkMode = false;
           autoRefresh = 0;
-          showTaskbar = false;
+          // 原来给未声明的 showTaskbar 赋值（隐式全局），且 saveExtras 根本不处理该键，重置不生效
+          window.stealth.setShowTaskbar(false);
           window.stealth.saveExtras({
             bossTransparent: bossTransparent, mediaControls: mediaControls,
-            hideScrollbar: hideScrollbar, darkMode: darkMode, autoRefresh: autoRefresh, showTaskbar: showTaskbar
+            hideScrollbar: hideScrollbar, darkMode: darkMode, autoRefresh: autoRefresh
           });
           $('bossTransparent').checked = bossTransparent;
           $('mediaControls').checked = mediaControls;
           $('hideScrollbar').checked = hideScrollbar;
           $('darkMode').checked = darkMode;
           $('autoRefresh').value = '0';
-          $('showTaskbar').checked = showTaskbar;
+          $('showTaskbar').checked = false;
           break;
       }
     }
@@ -2208,7 +2132,7 @@
         if (mode === 'web' && e.url && e.url.indexOf('welcome.html') < 0 && e.url.indexOf('about:') !== 0) {
           $('url').value = e.url; window.stealth.saveUrl(e.url);
         }
-        adCss(); applySpeed(); restoreZoom(); applyExtras(); applyA11yClick(); relayoutWeb();
+        adCss(); restoreZoom(); applyExtras(); applyA11yClick(); relayoutWeb();
       });
       view.addEventListener('did-navigate-in-page', function(e) {
         if (mode === 'web' && e.url && e.url.indexOf('welcome.html') < 0 && e.url.indexOf('about:') !== 0) {
@@ -2216,7 +2140,7 @@
         }
       });
       view.addEventListener('did-finish-load', function() {
-        adCss(); applySpeed(); restoreZoom(); applyExtras(); applyA11yClick(); relayoutWeb();
+        adCss(); restoreZoom(); applyExtras(); applyA11yClick(); relayoutWeb();
         // 自动添加历史记录（排除 about:blank —— 那是隐藏超时释放内存用的临时页）
         try {
           const url = view.getURL();
@@ -2241,7 +2165,7 @@
         } catch (e) {}
       });
       view.addEventListener('dom-ready', function() {
-        adCss(); applySpeed(); restoreZoom(); applyExtras(); applyA11yClick(); relayoutWeb();
+        adCss(); restoreZoom(); applyExtras(); applyA11yClick(); relayoutWeb();
         try { view.focus(); } catch(e){}
       });
       // webview 崩溃后自动恢复
@@ -2258,11 +2182,12 @@
         if (e.errorCode === -3 || e.errorCode === 0) return; // 忽略取消/正常
         console.warn('webview did-fail-load:', e.errorCode, e.errorDescription);
       });
+      const goBtnHtml = $('go').innerHTML; // 记住原始放大镜图标
       view.addEventListener('did-start-loading', function() {
         $('go').textContent = '×';
       });
       view.addEventListener('did-stop-loading', function() {
-        $('go').textContent = 'Go';
+        $('go').innerHTML = goBtnHtml; // 加载完恢复图标（原来换成文字"Go"，首次导航后图标永久丢失）
       });
 
       // 地址栏 Go：空内容回欢迎页
@@ -2270,9 +2195,12 @@
         const raw = $('url').value.trim();
         if (!raw) { goHome(); return; }
         if (urlSearchMode === 'novel') {
-          // 小说搜索模式
-          setMode('book');
-          if (typeof doNovelSearch === 'function') doNovelSearch(raw);
+          // 小说搜索模式：复用搜索面板的书源解析流程。
+          // 原实现调用不存在的 doNovelSearch，按 Go 只会切到空阅读界面，搜索毫无反应。
+          $('searchPanel').classList.add('show');
+          $('searchModeBookSource').click();
+          $('searchKeyword').value = raw;
+          $('doSearch').click();
         } else {
           // 网页搜索模式
           const u = normalizeUrl(raw);
@@ -2330,7 +2258,11 @@
         if (!$('opacityGroup').contains(e.target)) $('opacityGroup').classList.remove('open');
       });
 
-      $('speed').onchange = function() { speed = Number($('speed').value) || 1; window.stealth.setSpeed(speed); applySpeed(); };
+      $('speed').onchange = function() {
+        speed = Number($('speed').value) || 1;
+        window.stealth.setSpeed(speed); // 只发一次 IPC（原来 setSpeed+applySpeed 连发两次，注入翻倍）
+        if (mode === 'video') { try { $('video').playbackRate = speed; } catch (e) {} }
+      };
       $('fontUp').onclick = function() { fontSize = Math.min(40, fontSize + 1); $('novel').style.fontSize = fontSize + 'px'; saveProg(); };
       $('fontDown').onclick = function() { fontSize = Math.max(12, fontSize - 1); $('novel').style.fontSize = fontSize + 'px'; saveProg(); };
       $('tocBtn').onclick = toggleToc;
@@ -2789,7 +2721,13 @@
         showSet(false);
       };
 
-      $('novel').addEventListener('scroll', function() { saveProg(); renderReaderFoot(); });
+      // 滚动处理 rAF 节流：每帧最多刷新一次进度。原来每个 scroll 事件都读布局+写 DOM，
+      // 平滑滚动时高频读写交错，是阅读滚动掉帧的来源之一
+      let scrollRaf = null;
+      $('novel').addEventListener('scroll', function() {
+        if (scrollRaf) return;
+        scrollRaf = requestAnimationFrame(function() { scrollRaf = null; saveProg(); renderReaderFoot(); });
+      });
       // 阅读器底部：上一章/下一章
       $('rfPrev').onclick = function() { if (novel && chap > 0) { showChap(chap - 1, 0); saveProg(); } };
       $('rfNext').onclick = function() { if (novel && chap < novel.chapters.length - 1) { showChap(chap + 1, 0); saveProg(); } };
@@ -2806,17 +2744,7 @@
       $('viewHost').addEventListener('mousedown', function() { if (splitMode) setActivePanel('left'); });
       $('reader').addEventListener('mousedown', function() { if (splitMode) setActivePanel('right'); });
 
-      // 小说目录快捷键提示（在小说模式下显示小字）
-      function updateTocHint() {
-        const hintEl = $('tocHint');
-        if (!hintEl) return;
-        if (mode === 'book' && hotkeys && hotkeys.toc) {
-          hintEl.textContent = '按 ' + hotkeys.toc + ' 切换目录';
-          hintEl.style.display = '';
-        } else {
-          hintEl.style.display = 'none';
-        }
-      }
+      // 小说目录快捷键提示元素（显隐逻辑在 setMode 内；原独立 updateTocHint 从未被调用，已删）
       // 创建目录提示元素
       if (!$('tocHint')) {
         const hint = document.createElement('div');
@@ -2950,6 +2878,9 @@
         if (e.ctrlKey && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); $('file').click(); return; }
         if (e.ctrlKey && (e.key === 't' || e.key === 'T')) { e.preventDefault(); $('pin').click(); return; }
         if (mode !== 'book') return;
+        // 输入框打字时不劫持空格/方向键（原来阅读模式下在地址栏打空格会变成翻页）
+        var kt = e.target;
+        if (kt && (kt.tagName === 'INPUT' || kt.tagName === 'TEXTAREA' || kt.tagName === 'SELECT' || kt.isContentEditable)) return;
         if (e.ctrlKey && (e.key === '=' || e.key === '+')) { e.preventDefault(); $('fontUp').click(); }
         if (e.ctrlKey && e.key === '-') { e.preventDefault(); $('fontDown').click(); }
         if (e.ctrlKey && e.key === 'ArrowRight') { e.preventDefault(); showChap(chap + 1, 0); }

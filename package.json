@@ -1,6 +1,6 @@
 {
   "name": "pip-reader",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Simple PiP reader window",
   "main": "main.js",
   "author": "local",
@@ -15,8 +15,8 @@
     "xpath": "^0.0.34"
   },
   "devDependencies": {
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
   },
   "build": {
     "appId": "local.pip.reader",
